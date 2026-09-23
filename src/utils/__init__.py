@@ -1,0 +1,1 @@
+"""Utility helpers for MQTT and vehicle handling."""
