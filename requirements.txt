@@ -1,12 +1,2 @@
-bcrypt==5.0.0
-geographiclib==2.1
-geopy==2.5.0
-nanoid==2.0.0
-paho-mqtt==2.1.0
-peewee==4.4.0
-pygeohash==3.3.2
-PyMySQL==1.2.0
-redis==8.1.0
-redis-shelve==1.0.3
-resettabletimer==1.0.0
-valkey==6.1.1
+geopy>=2.5.0
+paho-mqtt>=1.6.1

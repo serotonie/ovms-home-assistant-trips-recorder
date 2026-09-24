@@ -1,3 +1,16 @@
 # Python virtual environments
 .venv/
 venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Home Assistant development instance
+dev/ha-config/.storage/
+dev/ha-config/.cache/
+dev/ha-config/home-assistant.log*
+dev/ha-config/.HA_VERSION
+dev/ha-config/.ha_run.lock
+dev/ha-config/*.db
+dev/ha-config/*.db-*

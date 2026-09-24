@@ -63,7 +63,7 @@ function createCustomElementRegistry() {
     };
 }
 
-function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver }) {
+function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver, MutationObserver }) {
     const sandbox = {
         module: { exports: {} },
         HTMLElement: FakeHTMLElement,
@@ -75,6 +75,7 @@ function loadPanelModule({ customElements, document, window, fetchImpl, ResizeOb
         clearTimeout,
         console,
         ResizeObserver,
+        MutationObserver,
     };
     vm.createContext(sandbox);
     new vm.Script(PANEL_SOURCE, { filename: "panel.js" }).runInContext(sandbox);
@@ -97,6 +98,74 @@ test("ensureMapDefined() ne force rien si ha-map est déjà défini", async () =
     await panel.ensureMapDefined();
 
     assert.equal(resolverCreated, false);
+});
+
+test("masque les marqueurs Leaflet sans modifier les chemins natifs", () => {
+    const customElements = createCustomElementRegistry();
+    const style = {};
+    const root = {
+        querySelector: () => null,
+        appendChild: (element) => { root.style = element; },
+    };
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => style },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+    panel.hideNativePathMarkers({ shadowRoot: root });
+
+    assert.equal(root.style.id, "trips-recorder-path-markers");
+    assert.match(root.style.textContent, /leaflet-overlay-pane/);
+});
+
+test("réaffiche le premier et le dernier marqueur natifs avec leurs couleurs", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({ customElements, document: { createElement: () => ({}) }, window: {} });
+    const panel = new TripsRecorderPanel();
+    const markers = [{ style: {} }, { style: {} }, { style: {} }];
+
+    panel.showNativeEndpointMarkers({
+        shadowRoot: { querySelectorAll: () => markers },
+    });
+
+    assert.match(markers[0].style.cssText, /#2196f3/);
+    assert.equal(markers[1].style.cssText, undefined);
+    assert.match(markers[2].style.cssText, /#ff9800/);
+});
+
+test("attend les marqueurs natifs ajoutés après le premier rendu", () => {
+    const customElements = createCustomElementRegistry();
+    let observer;
+    class FakeMutationObserver {
+        constructor(callback) {
+            this.callback = callback;
+            observer = this;
+        }
+        observe() {}
+        disconnect() {
+            this.disconnected = true;
+        }
+    }
+    const markers = [{ style: {} }, { style: {} }];
+    let rendered = false;
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+        MutationObserver: FakeMutationObserver,
+    });
+    const panel = new TripsRecorderPanel();
+    panel.showNativeEndpointMarkers({
+        shadowRoot: { querySelectorAll: () => rendered ? markers : [] },
+    });
+
+    rendered = true;
+    observer.callback();
+
+    assert.match(markers[0].style.cssText, /#2196f3/);
+    assert.match(markers[1].style.cssText, /#ff9800/);
+    assert.equal(observer.disconnected, true);
 });
 
 test("force le chargement du panneau Lovelace pour obtenir loadCardHelpers puis définit ha-map", async () => {
@@ -262,18 +331,15 @@ test("renderNativeMaps() configure la carte de chaque trajet", async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(maps[0].paths[0].name, "OVMS 1");
     assert.equal(maps[0]._connection.connection, connection);
+    assert.equal(maps[0].paths[0].name, "OVMS 1");
     assert.deepEqual(JSON.parse(JSON.stringify(maps[0].paths[0].points.map((point) => point.point))), [[48, 2], [48.1, 2.1]]);
     assert.deepEqual(JSON.parse(JSON.stringify(maps[0].fitBoundsPoints)), [[48, 2], [48.1, 2.1]]);
     assert.deepEqual(JSON.parse(JSON.stringify(maps[1].fitBoundsPoints)), [[49, 3], [49.1, 3.1]]);
     assert.deepEqual(JSON.parse(JSON.stringify(maps[0].center)), [48.05, 2.05]);
     assert.equal(maps[0].zoom, undefined);
     assert.equal(maps[0].autoFit, true);
-    assert.equal(JSON.stringify(maps[0].editableLocations), JSON.stringify([
-        { id: "start", location: [48, 2], title: "Départ", element: { style: { cssText: "display:block;width:14px;height:14px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;background:#2196f3;box-shadow:0 1px 3px rgba(0,0,0,.45);" } }, elementSize: [14, 14] },
-        { id: "stop", location: [48.1, 2.1], title: "Arrivée", element: { style: { cssText: "display:block;width:14px;height:14px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;background:#ff9800;box-shadow:0 1px 3px rgba(0,0,0,.45);" } }, elementSize: [14, 14] },
-    ]));
+    assert.deepEqual(JSON.parse(JSON.stringify(maps[0].editableLocations)), []);
     observers[0].callback([{ contentRect: { width: 320, height: 260 } }]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));

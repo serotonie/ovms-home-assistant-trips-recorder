@@ -1,0 +1,14 @@
+default_config:
+
+trips_recorder:
+
+logger:
+  default: info
+  logs:
+    custom_components.trips_recorder: debug
+    custom_components.ovms: debug
+
+homeassistant:
+  name: Trips Recorder Dev
+  unit_system: metric
+  time_zone: Europe/Paris

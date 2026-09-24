@@ -1,0 +1,22 @@
+{
+  "domain": "trips_recorder",
+  "name": "OVMS Home Assistant Trips Recorder",
+  "version": "0.1.0",
+  "codeowners": [
+    "@serotonie"
+  ],
+  "config_flow": false,
+  "dependencies": [
+    "http",
+    "ovms",
+    "panel_custom"
+  ],
+  "after_dependencies": [],
+  "documentation": "https://github.com/serotonie/ovms-home-assistant-trips-recorder",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/serotonie/ovms-home-assistant-trips-recorder/issues",
+  "requirements": [
+    "geopy>=2.5.0",
+    "paho-mqtt>=1.6.1"
+  ]
+}

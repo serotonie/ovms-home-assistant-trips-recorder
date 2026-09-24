@@ -62,6 +62,15 @@ class TripsRecorderPanel extends HTMLElement {
         }
     }
 
+    hideNativePathMarkers(map) {
+        const root = map.shadowRoot;
+        if (!root || root.querySelector("#trips-recorder-path-markers")) return;
+        const style = document.createElement("style");
+        style.id = "trips-recorder-path-markers";
+        style.textContent = ".leaflet-overlay-pane path.leaflet-interactive[fill]:not([fill='none']) { display: none !important; }";
+        root.appendChild(style);
+    }
+
     async forceLoadLovelacePanel() {
         // Uses the same private partial-panel-resolver route loader that
         // Home Assistant itself uses to lazy-load panels, so that
@@ -284,10 +293,7 @@ class TripsRecorderPanel extends HTMLElement {
             const points = (trip.waypoints || [])
                 .map((point) => [Number(point.position_lat), Number(point.position_long)])
                 .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
-            map.editableLocations = points.length > 1 ? [
-                { id: "start", location: points[0], title: "Départ", element: this.createEndpointMarker("#2196f3"), elementSize: [14, 14] },
-                { id: "stop", location: points[points.length - 1], title: "Arrivée", element: this.createEndpointMarker("#ff9800"), elementSize: [14, 14] },
-            ] : [];
+            map.editableLocations = [];
             map.autoFit = true;
             const fitTrip = () => {
                 if (!points.length) return;
@@ -299,6 +305,8 @@ class TripsRecorderPanel extends HTMLElement {
                 } else {
                     map.setView?.([latitude, longitude], 13);
                 }
+                this.hideNativePathMarkers(map);
+                this.showNativeEndpointMarkers(map);
             };
             const fitWhenReady = (attempts = 120) => {
                 if (map._engine || attempts === 0) {
@@ -327,6 +335,7 @@ class TripsRecorderPanel extends HTMLElement {
             }
             map.paths = [{
                 name: trip.vehicle || "Trajet",
+                color: "#03a9f4",
                 fullDatetime: true,
                 points: (trip.waypoints || [])
                     .map((point) => ({
@@ -341,6 +350,26 @@ class TripsRecorderPanel extends HTMLElement {
                 fitWhenReady();
             }
         });
+    }
+
+    showNativeEndpointMarkers(map) {
+        const root = map.shadowRoot;
+        if (!root) return;
+        const applyColors = () => {
+            const markers = root.querySelectorAll(
+                ".leaflet-overlay-pane path.leaflet-interactive[fill]:not([fill='none'])"
+            );
+            if (markers.length < 2) return false;
+            markers[0].style.cssText = "display:block !important;stroke:#2196f3 !important;fill:#2196f3 !important;";
+            markers[markers.length - 1].style.cssText = "display:block !important;stroke:#ff9800 !important;fill:#ff9800 !important;";
+            return true;
+        };
+        if (applyColors() || typeof MutationObserver !== "function") return;
+        map._tripMarkerObserver?.disconnect();
+        map._tripMarkerObserver = new MutationObserver(() => {
+            if (applyColors()) map._tripMarkerObserver.disconnect();
+        });
+        map._tripMarkerObserver.observe(root, { childList: true, subtree: true });
     }
 
     createEndpointMarker(color) {
