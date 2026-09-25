@@ -290,9 +290,12 @@ class TripsRecorderPanel extends HTMLElement {
         </form>
                 <div class="trips-grid">${this.renderTrips()}</div>
       </main>`);
-        this.shadowRoot.querySelector("#from").value = this.filters.from;
-        this.shadowRoot.querySelector("#to").value = this.filters.to;
-        this.shadowRoot.querySelector("#vehicle").value = this.filters.vehicle;
+        const fromField = this.shadowRoot.querySelector("#from");
+        const toField = this.shadowRoot.querySelector("#to");
+        const vehicleField = this.shadowRoot.querySelector("#vehicle");
+        if (fromField) fromField.value = this.filters.from;
+        if (toField) toField.value = this.filters.to;
+        if (vehicleField) vehicleField.value = this.filters.vehicle;
         this.bindEvents();
     }
 
