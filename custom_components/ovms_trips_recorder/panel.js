@@ -270,6 +270,7 @@ class TripsRecorderPanel extends HTMLElement {
         ha-top-app-bar-fixed { display: block; height: 100%; }
         .panel-content { min-height: 100%; }
         main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
         .eyebrow { color: var(--primary-color); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
         .muted { color: var(--secondary-text-color); }
@@ -297,6 +298,7 @@ class TripsRecorderPanel extends HTMLElement {
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .summary { display: block; } .trips-grid { grid-template-columns: 1fr; } }
       </style>
       <main>
+                <h1 class="visually-hidden">${this.t("trips")}</h1>
                 <div class="summary"><div class="eyebrow">OVMS / Home Assistant</div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></div>
         <form class="filters">
                     <label>${this.t("from")} <input id="from" type="date"></label>
