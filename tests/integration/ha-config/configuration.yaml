@@ -1,9 +1,9 @@
 default_config:
 
-trips_recorder:
+ovms_trips_recorder:
 
 logger:
   default: warning
   logs:
     custom_components.ovms: info
-    custom_components.trips_recorder: debug
+    custom_components.ovms_trips_recorder: debug
