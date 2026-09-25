@@ -267,7 +267,6 @@ class TripsRecorderPanel extends HTMLElement {
         this.shadowRoot.innerHTML = this.renderShellFromHtml(`
       <style>
         :host { display: block; height: 100%; color: var(--primary-text-color); }
-        ha-top-app-bar-fixed { display: block; height: 100%; }
         .panel-content { min-height: 100%; }
         main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
         .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

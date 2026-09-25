@@ -142,7 +142,7 @@ test("attend les marqueurs natifs ajoutés après le premier rendu", () => {
             this.callback = callback;
             observer = this;
         }
-        observe() {}
+        observe() { }
         disconnect() {
             this.disconnected = true;
         }
@@ -371,7 +371,7 @@ test("renderNativeMaps() configure la carte de chaque trajet", async () => {
         _engine: {
             addPath(path) {
                 this.path = path;
-                return { remove() {} };
+                return { remove() { } };
             },
         },
         addEventListener(event, handler, options) {
@@ -388,14 +388,18 @@ test("renderNativeMaps() configure la carte de chaque trajet", async () => {
     }));
     panel.shadowRoot.querySelectorAll = (selector) => selector === ".native-map" ? maps : [];
     panel.filteredTrips = [
-        { vehicle: "OVMS 1", waypoints: [
-            { position_lat: "48.0", position_long: "2.0", timestamp: "2026-09-20T10:00:00Z" },
-            { position_lat: "48.1", position_long: "2.1", timestamp: "2026-09-20T10:05:00Z" },
-        ] },
-        { vehicle: "OVMS 2", waypoints: [
-            { position_lat: "49.0", position_long: "3.0", timestamp: "2026-09-21T10:00:00Z" },
-            { position_lat: "49.1", position_long: "3.1", timestamp: "2026-09-21T10:05:00Z" },
-        ] },
+        {
+            vehicle: "OVMS 1", waypoints: [
+                { position_lat: "48.0", position_long: "2.0", timestamp: "2026-09-20T10:00:00Z" },
+                { position_lat: "48.1", position_long: "2.1", timestamp: "2026-09-20T10:05:00Z" },
+            ]
+        },
+        {
+            vehicle: "OVMS 2", waypoints: [
+                { position_lat: "49.0", position_long: "3.0", timestamp: "2026-09-21T10:00:00Z" },
+                { position_lat: "49.1", position_long: "3.1", timestamp: "2026-09-21T10:05:00Z" },
+            ]
+        },
     ];
 
     panel.renderNativeMaps();
