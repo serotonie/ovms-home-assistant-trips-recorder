@@ -445,7 +445,7 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     renderShell(content) {
-        return `<ha-top-app-bar-fixed has-scrolling-content ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
+        return `<ha-top-app-bar-fixed has-scrolling-content ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon" aria-label="Menu"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
     }
 
     renderError(message) {

@@ -282,7 +282,7 @@ test("render() ajoute l'entête standard Home Assistant au panneau", () => {
     panel.render();
 
     assert.match(panel.shadowRoot.innerHTML, /<ha-top-app-bar-fixed/);
-    assert.match(panel.shadowRoot.innerHTML, /<ha-menu-button slot="navigationIcon"><\/ha-menu-button>/);
+    assert.match(panel.shadowRoot.innerHTML, /<ha-menu-button slot="navigationIcon" aria-label="Menu"><\/ha-menu-button>/);
     assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
 });
 
