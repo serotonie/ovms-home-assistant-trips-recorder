@@ -4,9 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 1.2.0, without leading 'v')"
-        required: true
+        description: "Force a specific version (e.g. 1.2.0). Leave empty to auto-compute from commits"
+        required: false
         type: string
+      bump_type:
+        description: "Version bump when no explicit version is given"
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
       prerelease:
         description: "Mark this release as a pre-release"
         required: false
@@ -25,19 +35,56 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate version format
+      - name: Determine next version
+        id: version
         run: |
-          if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version must follow semantic versioning, e.g. 1.2.0" >&2
+          set -euo pipefail
+          current_version=$(jq -r '.version' custom_components/ovms_trips_recorder/manifest.json)
+          echo "Current version: $current_version"
+
+          if [ -n "${{ inputs.version }}" ]; then
+            next_version="${{ inputs.version }}"
+            echo "Using manually specified version: $next_version"
+          else
+            last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
+            if [ -n "$last_tag" ]; then
+              commits=$(git log "$last_tag"..HEAD --pretty=format:'%s%n%b')
+            else
+              commits=$(git log --pretty=format:'%s%n%b')
+            fi
+
+            bump="${{ inputs.bump_type }}"
+            if [ -z "$bump" ] || [ "$bump" = "auto" ]; then
+              if echo "$commits" | grep -qE '^[a-zA-Z]+(\(.+\))?!:|BREAKING CHANGE'; then
+                bump="major"
+              elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
+                bump="minor"
+              else
+                bump="patch"
+              fi
+            fi
+            echo "Bump type: $bump"
+
+            IFS='.' read -r major minor patch <<< "$current_version"
+            case "$bump" in
+              major) next_version="$((major + 1)).0.0" ;;
+              minor) next_version="${major}.$((minor + 1)).0" ;;
+              patch) next_version="${major}.${minor}.$((patch + 1))" ;;
+            esac
+          fi
+
+          if ! [[ "$next_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Computed version '$next_version' is not valid semver" >&2
             exit 1
           fi
 
-      - name: Check tag does not already exist
-        run: |
-          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
-            echo "Tag v${{ inputs.version }} already exists" >&2
+          if git rev-parse "v$next_version" >/dev/null 2>&1; then
+            echo "Tag v$next_version already exists" >&2
             exit 1
           fi
+
+          echo "Next version: $next_version"
+          echo "version=$next_version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -60,7 +107,7 @@ jobs:
 
       - name: Bump manifest version
         run: |
-          jq --arg version "${{ inputs.version }}" '.version = $version' \
+          jq --arg version "${{ steps.version.outputs.version }}" '.version = $version' \
             custom_components/ovms_trips_recorder/manifest.json > manifest.tmp.json
           mv manifest.tmp.json custom_components/ovms_trips_recorder/manifest.json
 
@@ -69,13 +116,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add custom_components/ovms_trips_recorder/manifest.json
-          git commit -m "chore: release v${{ inputs.version }}"
+          git commit -m "chore: release v${{ steps.version.outputs.version }}"
           git push origin HEAD:main
 
       - name: Create tag
         run: |
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Package integration for HACS
         run: |
@@ -85,8 +132,8 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ inputs.version }}"
-          name: "v${{ inputs.version }}"
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease }}
           files: ovms_trips_recorder.zip
