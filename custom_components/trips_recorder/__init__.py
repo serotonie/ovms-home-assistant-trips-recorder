@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the integration from YAML."""
-    if DOMAIN in config:
+    if DOMAIN in config and not hass.config_entries.async_entries(DOMAIN):
         hass.async_create_task(
             hass.config_entries.flow.async_init(
                 DOMAIN, context={"source": SOURCE_IMPORT}, data={}
@@ -77,8 +77,10 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload the integration."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+    domain_data = hass.data.get(DOMAIN, {})
+    store = domain_data.get(DATA_TRIP_STORE)
     if store:
         await store.async_stop()
-    hass.data.get(DOMAIN, {}).pop(DATA_SETUP_COMPLETE, None)
+    domain_data.pop(DATA_TRIP_STORE, None)
+    domain_data.pop(DATA_SETUP_COMPLETE, None)
     return True
