@@ -34,6 +34,7 @@ class TripsRecorderPanel extends HTMLElement {
         this.filters = { from: "", to: "", vehicle: "" };
         this.unsubscribeUpdates = null;
         this.loading = false;
+        this.narrow = false;
     }
 
     set hass(value) {
@@ -248,12 +249,12 @@ class TripsRecorderPanel extends HTMLElement {
             ...this.vehicles,
             ...this.trips.map((trip) => trip.vehicle).filter(Boolean),
         ])].sort();
-        this.shadowRoot.innerHTML = `
+        this.shadowRoot.innerHTML = this.renderShell(`
       <style>
         :host { display: block; height: 100%; color: var(--primary-text-color); }
-        main { padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
-        header { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
-        h1 { margin: 4px 0 0; font-size: 32px; letter-spacing: -0.03em; }
+        ha-top-app-bar-fixed { display: block; height: 100%; }
+        main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
+        .summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
         .eyebrow { color: var(--primary-color); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
         .muted { color: var(--secondary-text-color); }
         .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 18px; }
@@ -277,10 +278,10 @@ class TripsRecorderPanel extends HTMLElement {
         .trip-foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: 12px; }
         .distance { color: var(--primary-text-color); font-size: 18px; font-weight: 700; }
         .empty { padding: 32px 18px; color: var(--secondary-text-color); text-align: center; }
-        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } header { display: block; } .trips-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .summary { display: block; } .trips-grid { grid-template-columns: 1fr; } }
       </style>
       <main>
-                <header><div><div class="eyebrow">OVMS / Home Assistant</div><h1>${this.t("trips")}</h1></div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></header>
+                <div class="summary"><div class="eyebrow">OVMS / Home Assistant</div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></div>
         <form class="filters">
                     <label>${this.t("from")} <input id="from" type="date"></label>
                     <label>${this.t("to")} <input id="to" type="date"></label>
@@ -288,7 +289,7 @@ class TripsRecorderPanel extends HTMLElement {
                     <ha-button id="reset" appearance="outlined">${this.t("reset")}</ha-button>
         </form>
                 <div class="trips-grid">${this.renderTrips()}</div>
-      </main>`;
+      </main>`);
         this.shadowRoot.querySelector("#from").value = this.filters.from;
         this.shadowRoot.querySelector("#to").value = this.filters.to;
         this.shadowRoot.querySelector("#vehicle").value = this.filters.vehicle;
@@ -424,9 +425,13 @@ class TripsRecorderPanel extends HTMLElement {
         return marker;
     }
 
+    renderShell(content) {
+        return `<ha-top-app-bar-fixed ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span>${content}</ha-top-app-bar-fixed>`;
+    }
+
     renderError(message) {
         this.filteredTrips = [];
-        if (this.shadowRoot) this.shadowRoot.innerHTML = `<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`;
+        if (this.shadowRoot) this.shadowRoot.innerHTML = this.renderShell(`<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`);
     }
 
     escape(value) {

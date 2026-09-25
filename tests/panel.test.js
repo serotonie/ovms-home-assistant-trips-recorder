@@ -270,6 +270,22 @@ test("renderTrips() affiche une carte au-dessus des détails de chaque trajet", 
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
+test("render() ajoute l'entête standard Home Assistant au panneau", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+
+    panel.render();
+
+    assert.match(panel.shadowRoot.innerHTML, /<ha-top-app-bar-fixed/);
+    assert.match(panel.shadowRoot.innerHTML, /<ha-menu-button slot="navigationIcon"><\/ha-menu-button>/);
+    assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
+});
+
 test("traduit les libellés selon la langue Home Assistant avec repli anglais", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
