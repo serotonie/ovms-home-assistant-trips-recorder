@@ -270,9 +270,10 @@ class TripsRecorderPanel extends HTMLElement {
         ha-top-app-bar-fixed { display: block; height: 100%; }
         .panel-content { min-height: 100%; }
         main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
-        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
+        .summary-copy { display: grid; gap: 4px; }
         .eyebrow { color: var(--primary-color); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+        .page-title { margin: 0; font-size: clamp(1.75rem, 2.5vw, 2.25rem); line-height: 1.2; }
         .muted { color: var(--secondary-text-color); }
         .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 18px; }
         label { display: grid; gap: 5px; color: var(--secondary-text-color); font-size: 12px; font-weight: 700; }
@@ -298,8 +299,7 @@ class TripsRecorderPanel extends HTMLElement {
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .summary { display: block; } .trips-grid { grid-template-columns: 1fr; } }
       </style>
       <main>
-                <h1 class="visually-hidden">${this.t("trips")}</h1>
-                <div class="summary"><div class="eyebrow">OVMS / Home Assistant</div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></div>
+                <div class="summary"><div class="summary-copy"><div class="eyebrow">OVMS / Home Assistant</div><h1 class="page-title">${this.t("trips")}</h1></div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></div>
         <form class="filters">
                     <label>${this.t("from")} <input id="from" type="date"></label>
                     <label>${this.t("to")} <input id="to" type="date"></label>

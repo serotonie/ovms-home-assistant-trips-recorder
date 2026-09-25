@@ -284,7 +284,7 @@ test("render() adds the standard Home Assistant header shell", () => {
     assert.match(panel.shadowRoot.innerHTML, /<ha-top-app-bar-fixed/);
     assert.match(panel.shadowRoot.innerHTML, /<ha-menu-button slot="navigationIcon" aria-label="Menu"><\/ha-menu-button>/);
     assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
-    assert.match(panel.shadowRoot.innerHTML, /<h1 class="visually-hidden">Trips<\/h1>/);
+    assert.match(panel.shadowRoot.innerHTML, /<h1 class="page-title">Trips<\/h1>/);
 });
 
 test("renderError() keeps the standard Home Assistant header shell", () => {
