@@ -66,7 +66,7 @@ Containers** extension:
 The `.devcontainer` configuration then automates:
 
 - attaching VS Code to the Docker Compose `dev` service;
-- cloning the OVMS integration into `../ovms-home-assistant`;
+- cloning the OVMS integration into `dev/ovms-home-assistant`;
 - installing `mosquitto-clients` and the Python dependencies;
 - starting Home Assistant and Mosquitto as adjacent services.
 
@@ -76,11 +76,10 @@ are automatically forwarded by VS Code.
 The expected directory structure is:
 
 ```text
-workspace/
-  ovms-home-assistant/
+ovms-home-assistant-trips-recorder/
+  dev/ovms-home-assistant/
     custom_components/ovms/
-  ovms-home-assistant-trips-recorder/
-    docker-compose.dev.yml
+  docker-compose.dev.yml
 ```
 
 ### Starting the Environment
@@ -88,7 +87,7 @@ workspace/
 From the repository root:
 
 ```sh
-git clone https://github.com/enoch85/ovms-home-assistant.git ../ovms-home-assistant
+git clone https://github.com/enoch85/ovms-home-assistant.git dev/ovms-home-assistant
 docker compose -f docker-compose.dev.yml up -d
 ```
 

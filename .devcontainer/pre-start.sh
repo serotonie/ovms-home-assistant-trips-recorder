@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OVMS_DIR=../ovms-home-assistant
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+OVMS_DIR="$ROOT/dev/ovms-home-assistant"
 OVMS_URL=https://github.com/enoch85/ovms-home-assistant.git
 
 if [[ -d "$OVMS_DIR" && ! -d "$OVMS_DIR/.git" ]]; then

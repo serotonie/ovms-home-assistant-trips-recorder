@@ -5,7 +5,7 @@ services:
     working_dir: /workspaces/ovms-home-assistant-trips-recorder
     volumes:
       - .:/workspaces/ovms-home-assistant-trips-recorder:cached
-      - ../ovms-home-assistant:/workspaces/ovms-home-assistant:cached
+      - ./dev/ovms-home-assistant:/workspaces/ovms-home-assistant:cached
 
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:stable
@@ -18,7 +18,7 @@ services:
     volumes:
       - ./dev/ha-config:/config
       - ./custom_components/ovms_trips_recorder:/config/custom_components/ovms_trips_recorder:ro
-      - ../ovms-home-assistant/custom_components/ovms:/config/custom_components/ovms:ro
+      - ./dev/ovms-home-assistant/custom_components/ovms:/config/custom_components/ovms:ro
     environment:
       TZ: Europe/Paris
 

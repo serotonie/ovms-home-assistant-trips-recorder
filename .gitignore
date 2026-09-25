@@ -19,3 +19,4 @@ dev/ha-config/.HA_VERSION
 dev/ha-config/.ha_run.lock
 dev/ha-config/*.db
 dev/ha-config/*.db-*
+dev/ovms-home-assistant/

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ ! -d ../ovms-home-assistant/custom_components/ovms ]]; then
-  git clone https://github.com/enoch85/ovms-home-assistant.git ../ovms-home-assistant
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+OVMS_DIR="$ROOT/dev/ovms-home-assistant"
+
+if [[ ! -d "$OVMS_DIR/custom_components/ovms" ]]; then
+  git clone https://github.com/enoch85/ovms-home-assistant.git "$OVMS_DIR"
 fi
 
 sudo rm -f /etc/apt/sources.list.d/yarn.list
