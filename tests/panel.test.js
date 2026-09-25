@@ -270,6 +270,29 @@ test("renderTrips() affiche une carte au-dessus des détails de chaque trajet", 
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
+test("traduit les libellés selon la langue Home Assistant avec repli anglais", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+
+    panel._hass = { locale: { language: "fr" } };
+    panel.locale = panel.getLocale();
+    assert.equal(panel.t("trips"), "Trajets");
+    assert.equal(panel.t("arrival"), "Arrivée");
+
+    panel._hass = { locale: { language: "pt-BR" } };
+    panel.locale = panel.getLocale();
+    assert.equal(panel.t("reset"), "Redefinir");
+
+    panel._hass = { locale: { language: "xx" } };
+    panel.locale = panel.getLocale();
+    assert.equal(panel.t("trips"), "Trips");
+});
+
 test("renderNativeMaps() configure la carte de chaque trajet", async () => {
     const customElements = createCustomElementRegistry();
     const document = { createElement: () => ({ style: {} }) };
