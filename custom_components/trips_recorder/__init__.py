@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components import panel_custom
+from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    DATA_SETUP_COMPLETE,
     DATA_TRIP_STORE,
     DOMAIN,
     PANEL_ICON,
@@ -22,8 +24,22 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the integration and register the side panel."""
+    """Set up the integration from YAML."""
+    if DOMAIN in config and not hass.config_entries.async_entries(DOMAIN):
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT}, data={}
+            )
+        )
+    return True
+
+
+async def _async_setup_integration(hass: HomeAssistant) -> bool:
+    """Set up integration internals and register the side panel."""
     hass.data.setdefault(DOMAIN, {})
+    if hass.data[DOMAIN].get(DATA_SETUP_COMPLETE):
+        return True
+
     if DATA_TRIP_STORE not in hass.data[DOMAIN]:
         store = TripStore(hass)
         await store.async_load()
@@ -50,17 +66,23 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         require_admin=False,
     )
 
+    hass.data[DOMAIN][DATA_SETUP_COMPLETE] = True
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up the integration from a config entry if needed."""
-    return await async_setup(hass, {})
+    return await _async_setup_integration(hass)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload the integration."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+    await panel_custom.async_remove_panel(hass, PANEL_PATH)
+
+    domain_data = hass.data.get(DOMAIN, {})
+    store = domain_data.get(DATA_TRIP_STORE)
     if store:
         await store.async_stop()
+    domain_data.pop(DATA_TRIP_STORE, None)
+    domain_data.pop(DATA_SETUP_COMPLETE, None)
     return True

@@ -2,6 +2,7 @@
 
 DOMAIN = "trips_recorder"
 DATA_TRIP_STORE = "trips_recorder_trip_store"
+DATA_SETUP_COMPLETE = "trips_recorder_setup_complete"
 
 PANEL_TITLE = "Trips"
 PANEL_ICON = "mdi:map-marker-path"

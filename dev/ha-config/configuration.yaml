@@ -1,7 +1,5 @@
 default_config:
 
-trips_recorder:
-
 logger:
   default: info
   logs:
