@@ -270,7 +270,7 @@ test("renderTrips() affiche une carte au-dessus des détails de chaque trajet", 
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
-test("render() ajoute l'entête standard Home Assistant au panneau", () => {
+test("render() adds the standard Home Assistant header shell", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
         customElements,
@@ -286,7 +286,7 @@ test("render() ajoute l'entête standard Home Assistant au panneau", () => {
     assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
 });
 
-test("renderError() conserve l'entête standard Home Assistant", () => {
+test("renderError() keeps the standard Home Assistant header shell", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
         customElements,
@@ -302,7 +302,7 @@ test("renderError() conserve l'entête standard Home Assistant", () => {
     assert.match(panel.shadowRoot.innerHTML, /Unable to load trips\./);
 });
 
-test("render() propage le mode narrow au shell Home Assistant", () => {
+test("render() forwards narrow mode to the Home Assistant shell", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
         customElements,
