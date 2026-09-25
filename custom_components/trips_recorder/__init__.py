@@ -77,6 +77,8 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload the integration."""
+    await panel_custom.async_remove_panel(hass, PANEL_PATH)
+
     domain_data = hass.data.get(DOMAIN, {})
     store = domain_data.get(DATA_TRIP_STORE)
     if store:
