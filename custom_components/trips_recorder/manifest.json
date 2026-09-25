@@ -5,7 +5,7 @@
   "codeowners": [
     "@serotonie"
   ],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": [
     "http",
     "ovms",
