@@ -17,7 +17,13 @@ cleanup() {
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" logs || true
   fi
   docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" down --volumes --remove-orphans || true
-  rm -rf "$RUNTIME_DIR"
+  if ! rm -rf "$RUNTIME_DIR"; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo rm -rf "$RUNTIME_DIR"
+    else
+      echo "Unable to remove Docker-owned temporary files: $RUNTIME_DIR" >&2
+    fi
+  fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM
