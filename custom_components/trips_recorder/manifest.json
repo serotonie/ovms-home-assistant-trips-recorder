@@ -1,6 +1,6 @@
 {
   "domain": "trips_recorder",
-  "name": "OVMS Home Assistant Trips Recorder",
+  "name": "OVMS Trips Recorder",
   "version": "0.1.0",
   "codeowners": [
     "@serotonie"

@@ -33,11 +33,11 @@ custom_components/
 ## HACS Installation
 
 1. Add this repository as a custom HACS repository.
-2. Install "Trips Recorder".
+2. Install "OVMS Trips Recorder".
 3. Also install the OVMS Home Assistant integration for MQTT management.
 4. Restart Home Assistant.
 5. In Home Assistant, go to **Settings → Devices & Services → Add
-   Integration**, then add **OVMS Home Assistant Trips Recorder**.
+   Integration**, then add **OVMS Trips Recorder**.
 6. The sidebar panel will then be available from the dashboard sidebar.
 
 ## Development Environment
@@ -99,8 +99,8 @@ The Home Assistant instance is then available at <http://localhost:8123>. Create
 the administrator user, then add the **OVMS** integration with the following
 settings:
 
-> **Note**: in the dev environment, add the **OVMS Home Assistant Trips
-> Recorder** integration from the UI after startup.
+> **Note**: in the dev environment, add the **OVMS Trips Recorder**
+> integration from the UI after startup.
 
 - broker: `mosquitto`;
 - port: `1883`;

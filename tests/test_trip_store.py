@@ -118,7 +118,8 @@ def test_configured_vehicles_are_listed_when_mqtt_connection_fails() -> None:
     store = TripStore.__new__(TripStore)
     store._hass = types.SimpleNamespace(
         data={"ovms": {}},
-        config_entries=types.SimpleNamespace(async_entries=lambda domain: [entry]),
+        config_entries=types.SimpleNamespace(
+            async_entries=lambda domain: [entry]),
     )
     store._mqtt_clients = {}
     store._entry_signatures = {}
@@ -152,3 +153,44 @@ def test_custom_topic_uses_the_configured_vehicle_id() -> None:
     asyncio.run(store._async_mqtt_message(message, vehicle_id="DEMO"))
 
     assert started_vehicle_ids == ["DEMO"]
+
+
+def test_concurrent_stop_events_save_a_trip_only_once() -> None:
+    """Repeated stop events during geocoding must not duplicate a trip."""
+    store = TripStore.__new__(TripStore)
+    trip = {"vehicle": "DEMO", "waypoints": []}
+    store._vehicles = {
+        "DEMO": {
+            "trip": trip,
+            "timestamp": "2026-09-25T11:37:29+00:00",
+            "latitude": 46.644623,
+            "longitude": 6.404009,
+            "distance": 0.576,
+        }
+    }
+    store._data = {"trips": [], "active": {"DEMO": trip}}
+    store._stopping_vehicle_ids = set()
+    store._timeout_tasks = {}
+    store._geocode_trip_calls = 0
+
+    async def geocode_trip(_trip) -> None:
+        store._geocode_trip_calls += 1
+        await asyncio.sleep(0)
+
+    async def save() -> None:
+        await asyncio.sleep(0)
+
+    store._async_geocode_trip = geocode_trip
+    store.async_save = save
+    store._cancel_timeout = lambda _vehicle_id: None
+
+    async def stop_twice() -> None:
+        await asyncio.gather(
+            store._async_stop_trip("DEMO"),
+            store._async_stop_trip("DEMO"),
+        )
+
+    asyncio.run(stop_twice())
+
+    assert store._geocode_trip_calls == 1
+    assert store._data["trips"] == [trip]

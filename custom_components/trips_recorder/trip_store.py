@@ -35,6 +35,7 @@ class TripStore:
         self._data: dict[str, Any] = {"trips": [], "active": {}}
         self._vehicles: dict[str, dict[str, Any]] = {}
         self._timeout_tasks: dict[str, asyncio.Task[None]] = {}
+        self._stopping_vehicle_ids: set[str] = set()
         self._mqtt_clients: dict[str, mqtt.Client] = {}
         self._allowed_vehicle_ids: set[str] = set()
         self._entry_signatures: dict[str, tuple[Any, ...]] = {}
@@ -91,6 +92,7 @@ class TripStore:
         for task in self._timeout_tasks.values():
             task.cancel()
         self._timeout_tasks.clear()
+        self._stopping_vehicle_ids.clear()
 
     async def _async_start_mqtt_client(
         self, entry_id: str, config: dict[str, Any]
@@ -332,23 +334,31 @@ class TripStore:
 
     async def _async_stop_trip(self, vehicle_id: str) -> None:
         state = self._vehicles.get(vehicle_id)
-        if not state or state["trip"] is None:
+        if (
+            not state
+            or state["trip"] is None
+            or vehicle_id in self._stopping_vehicle_ids
+        ):
             return
+        self._stopping_vehicle_ids.add(vehicle_id)
         trip = state["trip"]
-        trip["stop_time"] = (
-            trip["waypoints"][-1]["timestamp"]
-            if trip["waypoints"]
-            else state["timestamp"] or self._now()
-        )
-        trip["stop_point_lat"] = state["latitude"]
-        trip["stop_point_long"] = state["longitude"]
-        trip["distance"] = state["distance"]
-        await self._async_geocode_trip(trip)
-        self._data["trips"].append(trip)
-        self._data["active"].pop(vehicle_id, None)
-        state["trip"] = None
-        self._cancel_timeout(vehicle_id)
-        await self.async_save()
+        try:
+            trip["stop_time"] = (
+                trip["waypoints"][-1]["timestamp"]
+                if trip["waypoints"]
+                else state["timestamp"] or self._now()
+            )
+            trip["stop_point_lat"] = state["latitude"]
+            trip["stop_point_long"] = state["longitude"]
+            trip["distance"] = state["distance"]
+            await self._async_geocode_trip(trip)
+            self._data["trips"].append(trip)
+            self._data["active"].pop(vehicle_id, None)
+            state["trip"] = None
+            self._cancel_timeout(vehicle_id)
+            await self.async_save()
+        finally:
+            self._stopping_vehicle_ids.discard(vehicle_id)
 
     async def _async_update_metric(
         self, vehicle_id: str, metric: str, value: str

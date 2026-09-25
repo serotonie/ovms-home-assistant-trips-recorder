@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.components import panel_custom
 from homeassistant.config_entries import SOURCE_IMPORT
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -22,6 +22,8 @@ from .trip_store import TripStore
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = [Platform.SENSOR]
+
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the integration from YAML."""
@@ -34,7 +36,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
-async def _async_setup_integration(hass: HomeAssistant) -> bool:
+async def _async_setup_integration(
+    hass: HomeAssistant, config_entry=None
+) -> bool:
     """Set up integration internals and register the side panel."""
     hass.data.setdefault(DOMAIN, {})
     if hass.data[DOMAIN].get(DATA_SETUP_COMPLETE):
@@ -51,9 +55,13 @@ async def _async_setup_integration(hass: HomeAssistant) -> bool:
             async def start_store(_event) -> None:
                 await store.async_start()
 
-            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, start_store)
+            hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED, start_store)
 
     await async_setup_panel(hass)
+
+    if config_entry is not None:
+        await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     await panel_custom.async_register_panel(
         hass=hass,
@@ -72,11 +80,12 @@ async def _async_setup_integration(hass: HomeAssistant) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up the integration from a config entry if needed."""
-    return await _async_setup_integration(hass)
+    return await _async_setup_integration(hass, entry)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload the integration."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     await panel_custom.async_remove_panel(hass, PANEL_PATH)
 
     domain_data = hass.data.get(DOMAIN, {})
@@ -85,4 +94,4 @@ async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         await store.async_stop()
     domain_data.pop(DATA_TRIP_STORE, None)
     domain_data.pop(DATA_SETUP_COMPLETE, None)
-    return True
+    return unload_ok
