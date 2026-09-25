@@ -25,7 +25,15 @@ class TripsRecorderApiView(HomeAssistantView):
         """Return the current list of trips."""
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         trips = await store.async_get_trips() if store else []
-        return self.json({"title": PANEL_TITLE, "trips": trips, "count": len(trips)})
+        vehicles = await store.async_get_vehicle_ids() if store else []
+        return self.json(
+            {
+                "title": PANEL_TITLE,
+                "trips": trips,
+                "vehicles": vehicles,
+                "count": len(trips),
+            }
+        )
 
 
 class TripsRecorderModuleView(HomeAssistantView):

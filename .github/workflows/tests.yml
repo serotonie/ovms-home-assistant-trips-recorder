@@ -18,5 +18,30 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Run tests
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python test dependencies
+        run: python -m pip install -r requirements.txt pytest
+
+      - name: Run Python tests
+        run: pytest -q tests/test_trip_store.py
+
+      - name: Run panel tests
         run: npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone OVMS integration
+        run: git clone --depth 1 https://github.com/enoch85/ovms-home-assistant.git "$RUNNER_TEMP/ovms-home-assistant"
+
+      - name: Run Home Assistant integration test
+        env:
+          OVMS_PATH: ${{ runner.temp }}/ovms-home-assistant
+        run: tests/integration/run.sh
