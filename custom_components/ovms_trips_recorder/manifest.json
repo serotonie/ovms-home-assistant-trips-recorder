@@ -1,7 +1,7 @@
 {
   "domain": "ovms_trips_recorder",
   "name": "OVMS Trips Recorder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "codeowners": [
     "@serotonie"
   ],
