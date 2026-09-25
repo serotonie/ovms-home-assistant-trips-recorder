@@ -108,6 +108,32 @@ def test_configured_vehicles_are_listed_without_received_trips() -> None:
     assert asyncio.run(store.async_get_vehicle_ids()) == ["DEMO", "SECOND"]
 
 
+def test_configured_vehicles_are_listed_when_mqtt_connection_fails() -> None:
+    """A broker failure must not hide configured vehicles from the panel."""
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"vehicle_id": "DEMO", "host": "broker", "port": 1883},
+        options={},
+    )
+    store = TripStore.__new__(TripStore)
+    store._hass = types.SimpleNamespace(
+        data={"ovms": {}},
+        config_entries=types.SimpleNamespace(async_entries=lambda domain: [entry]),
+    )
+    store._mqtt_clients = {}
+    store._entry_signatures = {}
+    store._allowed_vehicle_ids = set()
+
+    async def fail_to_start(*args) -> None:
+        raise OSError("broker unavailable")
+
+    store._async_start_mqtt_client = fail_to_start
+
+    asyncio.run(store._async_sync_ovms_entries())
+
+    assert store._allowed_vehicle_ids == {"DEMO"}
+
+
 def test_custom_topic_uses_the_configured_vehicle_id() -> None:
     """A custom suffix after the vehicle ID must not change the trip vehicle."""
     store = TripStore.__new__(TripStore)
