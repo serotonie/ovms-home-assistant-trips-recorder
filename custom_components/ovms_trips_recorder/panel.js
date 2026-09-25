@@ -253,6 +253,7 @@ class TripsRecorderPanel extends HTMLElement {
       <style>
         :host { display: block; height: 100%; color: var(--primary-text-color); }
         ha-top-app-bar-fixed { display: block; height: 100%; }
+        .panel-content { min-height: 100%; }
         main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
         .summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
         .eyebrow { color: var(--primary-color); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
@@ -429,7 +430,7 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     renderShell(content) {
-        return `<ha-top-app-bar-fixed ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span>${content}</ha-top-app-bar-fixed>`;
+        return `<ha-top-app-bar-fixed ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
     }
 
     renderError(message) {

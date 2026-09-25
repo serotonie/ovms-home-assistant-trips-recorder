@@ -286,6 +286,22 @@ test("render() ajoute l'entête standard Home Assistant au panneau", () => {
     assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
 });
 
+test("renderError() conserve l'entête standard Home Assistant", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+
+    panel.renderError("Unable to load trips.");
+
+    assert.match(panel.shadowRoot.innerHTML, /<ha-top-app-bar-fixed/);
+    assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
+    assert.match(panel.shadowRoot.innerHTML, /Unable to load trips\./);
+});
+
 test("traduit les libellés selon la langue Home Assistant avec repli anglais", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
