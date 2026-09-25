@@ -30,6 +30,7 @@
         }
     },
     "postCreateCommand": "bash .devcontainer/post-create.sh",
+    "initializeCommand": "bash .devcontainer/pre-start.sh",
     "customizations": {
         "vscode": {
             "extensions": [
