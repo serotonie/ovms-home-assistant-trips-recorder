@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.2.0, without leading 'v')"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark this release as a pre-release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must follow semantic versioning, e.g. 1.2.0" >&2
+            exit 1
+          fi
+
+      - name: Check tag does not already exist
+        run: |
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.version }} already exists" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python test dependencies
+        run: python -m pip install -r requirements.txt pytest
+
+      - name: Run Python tests
+        run: pytest -q tests/test_trip_store.py
+
+      - name: Run panel tests
+        run: npm test
+
+      - name: Bump manifest version
+        run: |
+          jq --arg version "${{ inputs.version }}" '.version = $version' \
+            custom_components/ovms_trips_recorder/manifest.json > manifest.tmp.json
+          mv manifest.tmp.json custom_components/ovms_trips_recorder/manifest.json
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/ovms_trips_recorder/manifest.json
+          git commit -m "chore: release v${{ inputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create tag
+        run: |
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+      - name: Package integration for HACS
+        run: |
+          cd custom_components/ovms_trips_recorder
+          zip -r "${{ github.workspace }}/ovms_trips_recorder.zip" .
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ inputs.version }}"
+          name: "v${{ inputs.version }}"
+          generate_release_notes: true
+          prerelease: ${{ inputs.prerelease }}
+          files: ovms_trips_recorder.zip
