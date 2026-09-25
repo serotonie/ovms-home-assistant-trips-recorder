@@ -264,7 +264,7 @@ class TripsRecorderPanel extends HTMLElement {
             ...this.vehicles,
             ...this.trips.map((trip) => trip.vehicle).filter(Boolean),
         ])].sort();
-        this.shadowRoot.innerHTML = this.renderShell(`
+        this.shadowRoot.innerHTML = this.renderShellFromHtml(`
       <style>
         :host { display: block; height: 100%; color: var(--primary-text-color); }
         ha-top-app-bar-fixed { display: block; height: 100%; }
@@ -444,13 +444,13 @@ class TripsRecorderPanel extends HTMLElement {
         return marker;
     }
 
-    renderShell(content) {
+    renderShellFromHtml(content) {
         return `<ha-top-app-bar-fixed has-scrolling-content ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon" aria-label="Menu"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
     }
 
     renderError(message) {
         this.filteredTrips = [];
-        if (this.shadowRoot) this.shadowRoot.innerHTML = this.renderShell(`<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`);
+        if (this.shadowRoot) this.shadowRoot.innerHTML = this.renderShellFromHtml(`<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`);
     }
 
     escape(value) {
