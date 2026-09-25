@@ -157,6 +157,12 @@ class TripStore:
             if vehicle_id:
                 wanted_vehicle_ids.add(vehicle_id)
 
+        # The panel can list configured vehicles even when their broker is
+        # temporarily unavailable.
+        self._allowed_vehicle_ids = wanted_vehicle_ids
+
+        for entry_id, config in entry_configs.items():
+
             signature = self._mqtt_config_signature(config)
             if self._entry_signatures.get(entry_id) == signature and entry_id in self._mqtt_clients:
                 continue
@@ -166,7 +172,15 @@ class TripStore:
                 await self._hass.async_add_executor_job(old_client.loop_stop)
                 await self._hass.async_add_executor_job(old_client.disconnect)
 
-            client = await self._async_start_mqtt_client(entry_id, config)
+            try:
+                client = await self._async_start_mqtt_client(entry_id, config)
+            except Exception as ex:
+                _LOGGER.warning(
+                    "Unable to start MQTT listener for OVMS vehicle %s: %s",
+                    config.get("vehicle_id", entry_id),
+                    ex,
+                )
+                client = None
             if client is not None:
                 self._entry_signatures[entry_id] = signature
             else:
@@ -178,8 +192,6 @@ class TripStore:
             await self._hass.async_add_executor_job(client.loop_stop)
             await self._hass.async_add_executor_job(client.disconnect)
             self._entry_signatures.pop(entry_id, None)
-
-        self._allowed_vehicle_ids = wanted_vehicle_ids
 
     @staticmethod
     def _mqtt_topic_filter(config: dict[str, Any]) -> str:
