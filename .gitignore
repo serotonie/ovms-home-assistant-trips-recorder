@@ -9,6 +9,9 @@ __pycache__/
 # Home Assistant development instance
 dev/ha-config/.storage/
 dev/ha-config/.cache/
+dev/ha-config/.cloud/
+dev/ha-config/deps/
+dev/ha-config/tts/
 dev/ha-config/home-assistant.log*
 dev/ha-config/.HA_VERSION
 dev/ha-config/.ha_run.lock
