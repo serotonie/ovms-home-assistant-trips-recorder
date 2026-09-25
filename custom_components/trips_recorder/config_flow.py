@@ -14,14 +14,15 @@ class TripsRecorderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
-        if self._async_current_entries():
-            return self.async_abort(reason="single_instance_allowed")
-
-        return self.async_create_entry(title="Trips Recorder", data={})
+        return self._create_or_abort("single_instance_allowed")
 
     async def async_step_import(self, user_input=None):
         """Import from YAML config."""
+        return self._create_or_abort("already_configured")
+
+    def _create_or_abort(self, abort_reason: str):
+        """Create the unique config entry or abort."""
         if self._async_current_entries():
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=abort_reason)
 
         return self.async_create_entry(title="Trips Recorder", data={})

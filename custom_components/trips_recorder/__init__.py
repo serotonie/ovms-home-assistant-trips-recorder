@@ -77,6 +77,14 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload the integration."""
+    other_entries = [
+        config_entry
+        for config_entry in hass.config_entries.async_entries(DOMAIN)
+        if config_entry.entry_id != entry.entry_id
+    ]
+    if other_entries:
+        return True
+
     await panel_custom.async_remove_panel(hass, PANEL_PATH)
 
     domain_data = hass.data.get(DOMAIN, {})
