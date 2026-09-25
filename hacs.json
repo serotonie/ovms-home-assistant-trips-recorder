@@ -1,7 +1,4 @@
 {
   "name": "OVMS Trips Recorder",
-  "content_integration": false,
-  "homeassistant": "2024.8.0",
-  "render_readme": true,
-  "filename": "ovms-home-assistant-trips-recorder.zip"
+  "homeassistant": "2024.8.0"
 }
