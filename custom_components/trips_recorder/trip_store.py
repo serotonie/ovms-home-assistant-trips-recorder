@@ -114,9 +114,11 @@ class TripStore:
                 context.verify_mode = ssl.CERT_NONE
             client.tls_set_context(context)
 
+        vehicle_id = str(config.get("vehicle_id", "")).strip()
+
         def on_message(_, __, message) -> None:
             asyncio.run_coroutine_threadsafe(
-                self._async_mqtt_message(message), self._hass.loop
+                self._async_mqtt_message(message, vehicle_id), self._hass.loop
             )
 
         client.on_message = on_message
@@ -126,12 +128,7 @@ class TripStore:
             _LOGGER.warning("OVMS broker configuration is incomplete")
             return None
         await self._hass.async_add_executor_job(client.connect, host, port, 60)
-        topic_prefix = config.get("topic_prefix", "ovms").strip("/")
-        vehicle_id = str(config.get("vehicle_id", "")).strip()
-        if vehicle_id:
-            topic = f"{topic_prefix}/+/{vehicle_id}/#"
-        else:
-            topic = f"{topic_prefix}/#"
+        topic = self._mqtt_topic_filter(config)
         await self._hass.async_add_executor_job(client.subscribe, topic, 2)
         await self._hass.async_add_executor_job(client.loop_start)
         self._mqtt_clients[entry_id] = client
@@ -140,13 +137,21 @@ class TripStore:
     async def _async_sync_ovms_entries(self) -> None:
         """Keep MQTT clients and allowed vehicle IDs aligned with OVMS entries."""
         ovms_entries = self._hass.data.get(OVMS_DOMAIN, {})
+        config_entries = {
+            entry.entry_id: entry
+            for entry in self._hass.config_entries.async_entries(OVMS_DOMAIN)
+        }
+        entry_configs: dict[str, dict[str, Any]] = {}
         wanted_vehicle_ids: set[str] = set()
 
-        for entry_id, entry_data in ovms_entries.items():
+        for entry_id, entry in config_entries.items():
+            config = {**entry.data, **entry.options}
+            entry_data = ovms_entries.get(entry_id, {})
             ovms_client = entry_data.get("mqtt_client")
-            config = getattr(ovms_client, "config", None)
-            if not config:
-                continue
+            client_config = getattr(ovms_client, "config", None)
+            if isinstance(client_config, dict):
+                config.update(client_config)
+            entry_configs[entry_id] = config
 
             vehicle_id = str(config.get("vehicle_id", "")).strip()
             if vehicle_id:
@@ -167,7 +172,7 @@ class TripStore:
             else:
                 self._entry_signatures.pop(entry_id, None)
 
-        removed_entry_ids = set(self._mqtt_clients) - set(ovms_entries)
+        removed_entry_ids = set(self._mqtt_clients) - set(entry_configs)
         for entry_id in removed_entry_ids:
             client = self._mqtt_clients.pop(entry_id)
             await self._hass.async_add_executor_job(client.loop_stop)
@@ -175,6 +180,29 @@ class TripStore:
             self._entry_signatures.pop(entry_id, None)
 
         self._allowed_vehicle_ids = wanted_vehicle_ids
+
+    @staticmethod
+    def _mqtt_topic_filter(config: dict[str, Any]) -> str:
+        """Build the subscription topic from an OVMS topic structure."""
+        topic_prefix = str(config.get("topic_prefix", "ovms")).strip("/")
+        vehicle_id = str(config.get("vehicle_id", "")).strip()
+        mqtt_username = str(
+            config.get("mqtt_username") or config.get("username") or ""
+        ).strip()
+        structure = str(
+            config.get("topic_structure")
+            or "{prefix}/{mqtt_username}/{vehicle_id}"
+        ).strip("/")
+        try:
+            topic = structure.format(
+                prefix=topic_prefix,
+                mqtt_username=mqtt_username,
+                vehicle_id=vehicle_id,
+            ).strip("/")
+        except (KeyError, ValueError):
+            _LOGGER.warning("Invalid OVMS topic structure: %s", structure)
+            topic = topic_prefix
+        return f"{topic}/#" if topic else "#"
 
     def _async_ovms_entry_changed(
         self, change: ConfigEntryChange, entry: ConfigEntry
@@ -194,6 +222,7 @@ class TripStore:
             config.get("password"),
             config.get("verify_ssl", True),
             config.get("topic_prefix", "ovms"),
+            config.get("topic_structure"),
             config.get("vehicle_id"),
         )
 
@@ -214,13 +243,24 @@ class TripStore:
         active_trips = self._data.get("active", {}).values()
         return trips + list(active_trips)
 
+    async def async_get_vehicle_ids(self) -> list[str]:
+        """Return configured and observed vehicle IDs for filter controls."""
+        observed_vehicle_ids = {
+            str(trip.get("vehicle", "")).strip()
+            for trip in await self.async_get_trips()
+            if trip.get("vehicle")
+        }
+        return sorted(self._allowed_vehicle_ids | observed_vehicle_ids)
+
     async def async_add_trip(self, trip: dict[str, Any]) -> dict[str, Any]:
         """Add one trip to the store and persist it."""
         self._data.setdefault("trips", []).append(trip)
         await self.async_save()
         return trip
 
-    async def _async_mqtt_message(self, message) -> None:
+    async def _async_mqtt_message(
+        self, message, vehicle_id: str | None = None
+    ) -> None:
         """Handle OVMS event and metric messages."""
         parts = message.topic.split("/")
         if "event" in parts:
@@ -231,7 +271,7 @@ class TripStore:
             return
         if marker < 1:
             return
-        vehicle_id = parts[marker - 1]
+        vehicle_id = vehicle_id or parts[marker - 1]
         if self._allowed_vehicle_ids and vehicle_id not in self._allowed_vehicle_ids:
             return
         if "event" in parts:

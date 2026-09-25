@@ -1,0 +1,26 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    depends_on:
+      - mosquitto
+    ports:
+      - "8123:8123"
+    volumes:
+      - ${HA_CONFIG_PATH}:/config
+      - ../../custom_components/trips_recorder:/config/custom_components/trips_recorder:ro
+      - ${OVMS_PATH}/custom_components/ovms:/config/custom_components/ovms:ro
+    environment:
+      TZ: Europe/Paris
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ../../dev/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  simulator:
+    image: eclipse-mosquitto:2
+    depends_on:
+      - mosquitto
+    volumes:
+      - ../../dev/simulate_trip.sh:/test/simulate_trip.sh:ro
+    entrypoint: ["/bin/sh"]

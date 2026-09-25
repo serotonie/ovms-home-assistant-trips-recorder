@@ -1,0 +1,128 @@
+"""Regression tests for OVMS MQTT discovery in the trip store."""
+
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import sys
+import types
+from pathlib import Path
+
+
+def _install_home_assistant_stubs() -> None:
+    """Provide the small Home Assistant surface required to import TripStore."""
+    homeassistant = types.ModuleType("homeassistant")
+    config_entries = types.ModuleType("homeassistant.config_entries")
+    config_entries.ConfigEntry = object
+    config_entries.ConfigEntryChange = object
+    config_entries.SIGNAL_CONFIG_ENTRY_CHANGED = "config_entry_changed"
+
+    core = types.ModuleType("homeassistant.core")
+    core.HomeAssistant = object
+
+    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
+    dispatcher.async_dispatcher_connect = lambda *args: None
+
+    storage = types.ModuleType("homeassistant.helpers.storage")
+
+    class Store:
+        def __init__(self, *args) -> None:
+            pass
+
+    storage.Store = Store
+    helpers = types.ModuleType("homeassistant.helpers")
+
+    sys.modules.update(
+        {
+            "homeassistant": homeassistant,
+            "homeassistant.config_entries": config_entries,
+            "homeassistant.core": core,
+            "homeassistant.helpers": helpers,
+            "homeassistant.helpers.dispatcher": dispatcher,
+            "homeassistant.helpers.storage": storage,
+        }
+    )
+
+
+_install_home_assistant_stubs()
+ROOT = Path(__file__).parents[1]
+PACKAGE_NAME = "trips_recorder_test"
+package = types.ModuleType(PACKAGE_NAME)
+package.__path__ = [str(ROOT / "custom_components" / "trips_recorder")]
+sys.modules[PACKAGE_NAME] = package
+spec = importlib.util.spec_from_file_location(
+    f"{PACKAGE_NAME}.trip_store",
+    ROOT / "custom_components" / "trips_recorder" / "trip_store.py",
+)
+trip_store = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = trip_store
+assert spec.loader is not None
+spec.loader.exec_module(trip_store)
+TripStore = trip_store.TripStore
+
+
+def test_mqtt_topic_filter_supports_all_ovms_topic_structures() -> None:
+    """Every topic structure accepted by OVMS must be subscribed to here."""
+    base_config = {
+        "topic_prefix": "ovms",
+        "mqtt_username": "driver",
+        "vehicle_id": "DEMO",
+    }
+
+    expected_topics = {
+        "{prefix}/{mqtt_username}/{vehicle_id}": "ovms/driver/DEMO/#",
+        "{prefix}/client/{vehicle_id}": "ovms/client/DEMO/#",
+        "{prefix}/{vehicle_id}": "ovms/DEMO/#",
+        "garage/{vehicle_id}/telemetry": "garage/DEMO/telemetry/#",
+    }
+
+    for topic_structure, expected_topic in expected_topics.items():
+        config = {**base_config, "topic_structure": topic_structure}
+        assert TripStore._mqtt_topic_filter(config) == expected_topic
+
+
+def test_mqtt_config_signature_changes_with_topic_structure() -> None:
+    """Changing the OVMS topic layout must reconnect the MQTT subscriber."""
+    config = {
+        "host": "broker.example.test",
+        "port": 1883,
+        "vehicle_id": "DEMO",
+        "topic_structure": "{prefix}/{vehicle_id}",
+    }
+    changed_config = {
+        **config,
+        "topic_structure": "{prefix}/client/{vehicle_id}",
+    }
+
+    assert TripStore._mqtt_config_signature(config) != TripStore._mqtt_config_signature(
+        changed_config
+    )
+
+
+def test_configured_vehicles_are_listed_without_received_trips() -> None:
+    """The panel filter must show OVMS vehicles before their first trip."""
+    store = TripStore.__new__(TripStore)
+    store._allowed_vehicle_ids = {"DEMO", "SECOND"}
+    store._data = {"trips": [], "active": {}}
+
+    assert asyncio.run(store.async_get_vehicle_ids()) == ["DEMO", "SECOND"]
+
+
+def test_custom_topic_uses_the_configured_vehicle_id() -> None:
+    """A custom suffix after the vehicle ID must not change the trip vehicle."""
+    store = TripStore.__new__(TripStore)
+    store._allowed_vehicle_ids = {"DEMO"}
+    started_vehicle_ids: list[str] = []
+
+    async def start_trip(vehicle_id: str) -> None:
+        started_vehicle_ids.append(vehicle_id)
+
+    store._async_start_trip = start_trip
+    message = types.SimpleNamespace(
+        topic="garage/DEMO/telemetry/event/vehicle/on",
+        payload=b"vehicle.on",
+    )
+
+    asyncio.run(store._async_mqtt_message(message, vehicle_id="DEMO"))
+
+    assert started_vehicle_ids == ["DEMO"]

@@ -6,6 +6,7 @@ class TripsRecorderPanel extends HTMLElement {
         super();
         this.attachShadow({ mode: "open" });
         this.trips = [];
+        this.vehicles = [];
         this.filteredTrips = [];
         this.filters = { from: "", to: "", vehicle: "" };
         this.unsubscribeUpdates = null;
@@ -118,6 +119,7 @@ class TripsRecorderPanel extends HTMLElement {
             const response = await fetch(PANEL_API);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
             this.updateTrips(data.trips || []);
         } catch (error) {
             this.renderError("Impossible de charger les trajets.");
@@ -201,7 +203,10 @@ class TripsRecorderPanel extends HTMLElement {
 
     render() {
         if (!this.shadowRoot) return;
-        const vehicles = [...new Set(this.trips.map((trip) => trip.vehicle).filter(Boolean))];
+        const vehicles = [...new Set([
+            ...this.vehicles,
+            ...this.trips.map((trip) => trip.vehicle).filter(Boolean),
+        ])].sort();
         this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; height: 100%; color: var(--primary-text-color); }
@@ -264,7 +269,7 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     renderTripDetails(trip) {
-                return `
+        return `
             <div class="trip-head"><span class="trip-title">${this.escape(this.formatDate(trip.start_time))}</span><span class="vehicle">${this.escape(trip.vehicle || "Véhicule")}</span></div>
             <div class="route"><div class="route-line"><i class="dot"></i><i class="connector"></i><i class="dot stop"></i></div><div><div class="address"><strong>Départ</strong><br>${this.escape(this.formatAddress(trip, "start"))}</div><div class="address"><strong>Arrivée</strong><br>${this.escape(this.formatAddress(trip, "stop"))}</div></div></div>
             <div class="trip-foot"><span>${this.escape(this.formatDate(trip.stop_time))}</span><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>

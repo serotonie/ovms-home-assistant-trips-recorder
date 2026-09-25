@@ -130,6 +130,23 @@ testing, for example `OVMS_TRIP_COUNT=2 ./dev/simulate_trip.sh`.
 The simulator waits 25 seconds between trips so Home Assistant can finish
 reverse geocoding; adjust this with `OVMS_TRIP_PAUSE` if needed.
 
+### Topic Structures
+
+The simulator uses the same topic structure as the parent OVMS entry. Configure
+the parent entry in its UI, then pass that selected structure to the simulator
+through `OVMS_TOPIC_STRUCTURE`:
+
+| OVMS structure | Simulator command |
+| --- | --- |
+| `{prefix}/{mqtt_username}/{vehicle_id}` | `./dev/simulate_trip.sh` |
+| `{prefix}/client/{vehicle_id}` | `OVMS_TOPIC_STRUCTURE='{prefix}/client/{vehicle_id}' ./dev/simulate_trip.sh` |
+| `{prefix}/{vehicle_id}` | `OVMS_TOPIC_STRUCTURE='{prefix}/{vehicle_id}' ./dev/simulate_trip.sh` |
+| `custom` | Select `custom` in OVMS, enter a template such as `garage/{vehicle_id}/telemetry`, then run `OVMS_TOPIC_STRUCTURE='garage/{vehicle_id}/telemetry' ./dev/simulate_trip.sh` |
+
+The supported placeholders for a custom template are `{prefix}`,
+`{mqtt_username}`, and `{vehicle_id}`. `OVMS_TOPIC_STRUCTURE` must contain the
+template itself; do not set it to the literal value `custom`.
+
 To simulate several vehicles, provide a comma-separated list of vehicle IDs:
 
 ```sh
@@ -142,6 +159,8 @@ The Trips Recorder only accepts vehicles declared by those parent OVMS entries.
 Repeated IDs are ignored by the simulator.
 Changes to OVMS entries are detected automatically at runtime, so adding a
 vehicle in the parent integration no longer requires restarting Home Assistant.
+Configured vehicles are available in the panel filter immediately, even before
+their first recorded trip.
 
 To follow the Home Assistant logs:
 
@@ -161,16 +180,29 @@ addresses are missing, but the GPS coordinates are preserved.
 
 ## Tests
 
-Regression tests are provided for the sidebar panel logic in
-[`custom_components/trips_recorder/panel.js`](custom_components/trips_recorder/panel.js).
+Regression tests cover the sidebar panel and OVMS MQTT topic discovery.
 
 From the repository root, run:
 
 ```sh
+python3 -m pip install -r requirements.txt pytest
+pytest -q tests/test_trip_store.py
 npm test
 ```
 
-This executes the Node.js test suite in the [`tests/`](tests/) directory.
+This executes the Python MQTT regression tests and the Node.js panel test suite
+in the [`tests/`](tests/) directory.
+
+### End-to-End Test
+
+The GitHub Actions workflow also starts Home Assistant, Mosquitto, the parent
+OVMS integration, and this integration in Docker. It provisions four OVMS
+entries, simulates one trip for each topic structure, and verifies that all four
+trips are returned by the panel API. To run this check locally:
+
+```sh
+OVMS_PATH=../ovms-home-assistant tests/integration/run.sh
+```
 
 ## MQTT Dependency
 
@@ -185,9 +217,13 @@ It uses OVMS topics to:
 - store trips at the appropriate time
 - expose trip history in the sidebar panel
 
-The broker settings (`host`, `port`, credentials, TLS, and topic prefix) are
-read from the OVMS integration configuration. You must therefore install and
-configure at least one OVMS entry before using this component.
+The broker settings (`host`, `port`, credentials, TLS, topic prefix, and topic
+structure) are read from the OVMS integration configuration. The recorder
+subscribes using the configured OVMS structure, including the standard
+`{prefix}/{mqtt_username}/{vehicle_id}`, `{prefix}/client/{vehicle_id}`, and
+`{prefix}/{vehicle_id}` layouts, as well as a custom structure using the same
+placeholders. You must therefore install and configure at least one OVMS entry
+before using this component.
 
 ## Storage
 

@@ -4,6 +4,34 @@ set -eu
 PREFIX="${OVMS_TOPIC_PREFIX:-ovms}"
 USERNAME="${OVMS_TOPIC_USERNAME:-demo}"
 VEHICLE_IDS="${OVMS_VEHICLE_IDS:-${OVMS_VEHICLE_ID:-car-1}}"
+TOPIC_STRUCTURE="${OVMS_TOPIC_STRUCTURE:-\{prefix\}/\{mqtt_username\}/\{vehicle_id\}}"
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed 's/[\\/&|]/\\&/g'
+}
+
+topic_base() {
+  structure="$TOPIC_STRUCTURE"
+  prefix=$(escape_sed_replacement "$PREFIX")
+  username=$(escape_sed_replacement "$USERNAME")
+  vehicle_id=$(escape_sed_replacement "$1")
+  base=$(printf '%s' "$structure" | sed \
+    -e "s|{prefix}|$prefix|g" \
+    -e "s|{mqtt_username}|$username|g" \
+    -e "s|{vehicle_id}|$vehicle_id|g")
+  case "$base" in
+    *'{'*|*'}'*)
+      echo "Invalid OVMS_TOPIC_STRUCTURE: $TOPIC_STRUCTURE" >&2
+      exit 2
+      ;;
+  esac
+  printf '%s\n' "$base"
+}
+
+if [ "$TOPIC_STRUCTURE" = "custom" ]; then
+  echo "OVMS_TOPIC_STRUCTURE must be the custom template, not 'custom'" >&2
+  exit 2
+fi
 
 publish() {
   topic="$1"
@@ -37,6 +65,7 @@ format_time() {
 
 TRIP_PAUSE="${OVMS_TRIP_PAUSE:-25}"
 TRIP_COUNT_OVERRIDE="${OVMS_TRIP_COUNT:-}"
+WAYPOINT_PAUSE_OVERRIDE="${OVMS_WAYPOINT_PAUSE:-}"
 SEEN_VEHICLE_IDS=""
 
 for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
@@ -47,7 +76,7 @@ for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
       ;;
   esac
   SEEN_VEHICLE_IDS="$SEEN_VEHICLE_IDS $VEHICLE_ID"
-  BASE="${PREFIX}/${USERNAME}/${VEHICLE_ID}"
+  BASE=$(topic_base "$VEHICLE_ID")
   if [ -n "$TRIP_COUNT_OVERRIDE" ]; then
     TRIP_COUNT="$TRIP_COUNT_OVERRIDE"
   else
@@ -58,7 +87,7 @@ for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
   CURRENT_TIME=$((CURRENT_TIME + $(random_int 6 21) * 3600 + $(random_int 0 59) * 60))
   ODOMETER=12000
 
-  echo "Starting ${TRIP_COUNT} simulated trips for ${VEHICLE_ID}"
+  echo "Starting ${TRIP_COUNT} simulated trips for ${VEHICLE_ID} on ${BASE}"
 
   trip=1
   while [ "$trip" -le "$TRIP_COUNT" ]; do
@@ -95,7 +124,11 @@ for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
       metric "m/time/utc" "$(format_time "$POINT_TIME")"
       if [ "$point" -lt "$POINTS" ]; then
         ELAPSED=$((ELAPSED + $(random_int 3 12) * 60))
-        WAYPOINT_PAUSE=$(random_int 2 8)
+        if [ -n "$WAYPOINT_PAUSE_OVERRIDE" ]; then
+          WAYPOINT_PAUSE="$WAYPOINT_PAUSE_OVERRIDE"
+        else
+          WAYPOINT_PAUSE=$(random_int 2 8)
+        fi
         echo "Waiting ${WAYPOINT_PAUSE}s before waypoint $((point + 1))/${POINTS}"
         sleep "$WAYPOINT_PAUSE"
       fi
