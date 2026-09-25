@@ -35,7 +35,7 @@ docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
 
 attempt=1
 while [ "$attempt" -le 60 ]; do
-  if curl --fail --silent --show-error http://localhost:8123/api/trips_recorder/trips >/dev/null 2>&1; then
+  if curl --fail --silent --show-error http://localhost:8123/api/ovms_trips_recorder/trips >/dev/null 2>&1; then
     break
   fi
   sleep 2
@@ -68,7 +68,7 @@ done
 
 attempt=1
 while [ "$attempt" -le 30 ]; do
-  if curl --fail --silent --show-error http://localhost:8123/api/trips_recorder/trips |
+  if curl --fail --silent --show-error http://localhost:8123/api/ovms_trips_recorder/trips |
     python3 -c 'import json, sys; data = json.load(sys.stdin); expected = {"e2e-default", "e2e-client", "e2e-simple", "e2e-custom"}; sys.exit(not (expected <= set(data["vehicles"]) and expected <= {trip["vehicle"] for trip in data["trips"]}))'; then
     exit 0
   fi

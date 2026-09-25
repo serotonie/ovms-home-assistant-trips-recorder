@@ -46,13 +46,13 @@ def _install_home_assistant_stubs() -> None:
 
 _install_home_assistant_stubs()
 ROOT = Path(__file__).parents[1]
-PACKAGE_NAME = "trips_recorder_test"
+PACKAGE_NAME = "ovms_trips_recorder_test"
 package = types.ModuleType(PACKAGE_NAME)
-package.__path__ = [str(ROOT / "custom_components" / "trips_recorder")]
+package.__path__ = [str(ROOT / "custom_components" / "ovms_trips_recorder")]
 sys.modules[PACKAGE_NAME] = package
 spec = importlib.util.spec_from_file_location(
     f"{PACKAGE_NAME}.trip_store",
-    ROOT / "custom_components" / "trips_recorder" / "trip_store.py",
+    ROOT / "custom_components" / "ovms_trips_recorder" / "trip_store.py",
 )
 trip_store = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = trip_store

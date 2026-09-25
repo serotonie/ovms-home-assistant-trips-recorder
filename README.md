@@ -22,7 +22,7 @@ https://github.com/serotonie/ovms-home-assistant-trips-recorder
 
 ```text
 custom_components/
-  trips_recorder/
+  ovms_trips_recorder/
     __init__.py
     const.py
     manifest.json

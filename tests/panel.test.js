@@ -16,7 +16,7 @@ const PANEL_PATH = path.join(
     __dirname,
     "..",
     "custom_components",
-    "trips_recorder",
+    "ovms_trips_recorder",
     "panel.js"
 );
 const PANEL_SOURCE = fs.readFileSync(PANEL_PATH, "utf8");

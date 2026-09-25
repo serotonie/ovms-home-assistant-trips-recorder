@@ -17,7 +17,7 @@ services:
       - "8123:8123"
     volumes:
       - ./dev/ha-config:/config
-      - ./custom_components/trips_recorder:/config/custom_components/trips_recorder:ro
+      - ./custom_components/ovms_trips_recorder:/config/custom_components/ovms_trips_recorder:ro
       - ../ovms-home-assistant/custom_components/ovms:/config/custom_components/ovms:ro
     environment:
       TZ: Europe/Paris

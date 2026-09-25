@@ -1,5 +1,5 @@
-const PANEL_API = "/api/trips_recorder/trips";
-const TRIP_UPDATED_EVENT = "trips_recorder_updated";
+const PANEL_API = "/api/ovms_trips_recorder/trips";
+const TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
 
 class TripsRecorderPanel extends HTMLElement {
     constructor() {
