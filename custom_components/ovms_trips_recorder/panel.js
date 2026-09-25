@@ -34,7 +34,7 @@ class TripsRecorderPanel extends HTMLElement {
         this.filters = { from: "", to: "", vehicle: "" };
         this.unsubscribeUpdates = null;
         this.loading = false;
-        this.narrow = false;
+        this._narrow = null;
     }
 
     set hass(value) {
@@ -52,6 +52,21 @@ class TripsRecorderPanel extends HTMLElement {
             this.subscribeToUpdates();
             this.ensureMapDefined().then(() => this.render());
         }
+    }
+
+    set narrow(value) {
+        const nextValue = value == null ? null : Boolean(value);
+        if (this._narrow === nextValue) return;
+        this._narrow = nextValue;
+        if (this.initialized) this.render();
+    }
+
+    get narrow() {
+        if (typeof this._narrow === "boolean") return this._narrow;
+        if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+            return window.matchMedia("(max-width: 870px)").matches;
+        }
+        return this._hass?.dockedSidebar === "always_hidden";
     }
 
     disconnectedCallback() {
