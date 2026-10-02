@@ -4,20 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import ssl
 import time
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Callable
 
 from geopy.geocoders import Nominatim
-import paho.mqtt.client as mqtt
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigEntryChange,
     SIGNAL_CONFIG_ENTRY_CHANGED,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.storage import Store
 
@@ -36,14 +35,13 @@ class TripStore:
         self._vehicles: dict[str, dict[str, Any]] = {}
         self._timeout_tasks: dict[str, asyncio.Task[None]] = {}
         self._stopping_vehicle_ids: set[str] = set()
-        self._mqtt_clients: dict[str, mqtt.Client] = {}
         self._allowed_vehicle_ids: set[str] = set()
-        self._entry_signatures: dict[str, tuple[Any, ...]] = {}
+        self._entry_vehicle_ids: dict[str, str] = {}
         self._geocode_cache: dict[str, dict[str, str]] = {}
         self._geocode_lock = asyncio.Lock()
         self._last_geocode_at = 0.0
-        self._ovms_sync_task: asyncio.Task[None] | None = None
         self._ovms_entry_unsub: Callable[[], None] | None = None
+        self._state_unsub: Callable[[], None] | None = None
         self._started = False
 
     async def async_load(self) -> None:
@@ -61,7 +59,7 @@ class TripStore:
         }
 
     async def async_start(self) -> None:
-        """Connect to each broker configured by the OVMS integration."""
+        """Listen to entities provided by the OVMS integration."""
         if self._started:
             return
         self._started = True
@@ -71,174 +69,132 @@ class TripStore:
             SIGNAL_CONFIG_ENTRY_CHANGED,
             self._async_ovms_entry_changed,
         )
+        self._state_unsub = self._hass.bus.async_listen(
+            EVENT_STATE_CHANGED, self._async_state_changed
+        )
+        await self._async_restore_vehicle_metrics()
         for vehicle_id in self._vehicles:
             self._schedule_timeout(vehicle_id)
 
     async def async_stop(self) -> None:
-        """Stop receiving MQTT messages and cancel timeout tasks."""
+        """Stop listening to OVMS entities and cancel timeout tasks."""
         self._started = False
         if self._ovms_entry_unsub is not None:
             self._ovms_entry_unsub()
             self._ovms_entry_unsub = None
-        if self._ovms_sync_task is not None:
-            self._ovms_sync_task.cancel()
-            self._ovms_sync_task = None
-        for client in self._mqtt_clients.values():
-            await self._hass.async_add_executor_job(client.loop_stop)
-            await self._hass.async_add_executor_job(client.disconnect)
-        self._mqtt_clients.clear()
-        self._entry_signatures.clear()
+        if self._state_unsub is not None:
+            self._state_unsub()
+            self._state_unsub = None
         self._allowed_vehicle_ids.clear()
+        self._entry_vehicle_ids.clear()
         for task in self._timeout_tasks.values():
             task.cancel()
         self._timeout_tasks.clear()
         self._stopping_vehicle_ids.clear()
 
-    async def _async_start_mqtt_client(
-        self, entry_id: str, config: dict[str, Any]
-    ) -> mqtt.Client | None:
-        """Start a listener using one OVMS config entry's broker settings."""
-        protocol = mqtt.MQTTv5 if hasattr(mqtt, "MQTTv5") else mqtt.MQTTv311
-        transport = "websockets" if config.get(
-            "protocol") in ("ws", "wss") else "tcp"
-        client = mqtt.Client(
-            client_id=f"ha_trips_{id(config):x}"[:23],
-            protocol=protocol,
-            transport=transport,
-        )
-        username = config.get("username")
-        if username:
-            client.username_pw_set(username, config.get("password"))
-        if config.get("protocol") in ("mqtts", "wss"):
-            context = ssl.create_default_context()
-            if not config.get("verify_ssl", True):
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-            client.tls_set_context(context)
-
-        vehicle_id = str(config.get("vehicle_id", "")).strip()
-
-        def on_message(_, __, message) -> None:
-            asyncio.run_coroutine_threadsafe(
-                self._async_mqtt_message(message, vehicle_id), self._hass.loop
-            )
-
-        client.on_message = on_message
-        host = config.get("host")
-        port = config.get("port")
-        if not host or not port:
-            _LOGGER.warning("OVMS broker configuration is incomplete")
-            return None
-        await self._hass.async_add_executor_job(client.connect, host, port, 60)
-        topic = self._mqtt_topic_filter(config)
-        await self._hass.async_add_executor_job(client.subscribe, topic, 2)
-        await self._hass.async_add_executor_job(client.loop_start)
-        self._mqtt_clients[entry_id] = client
-        return client
-
     async def _async_sync_ovms_entries(self) -> None:
-        """Keep MQTT clients and allowed vehicle IDs aligned with OVMS entries."""
-        ovms_entries = self._hass.data.get(OVMS_DOMAIN, {})
-        config_entries = {
-            entry.entry_id: entry
-            for entry in self._hass.config_entries.async_entries(OVMS_DOMAIN)
-        }
-        entry_configs: dict[str, dict[str, Any]] = {}
+        """Keep configured vehicle IDs aligned with OVMS entries."""
+        entry_vehicle_ids: dict[str, str] = {}
         wanted_vehicle_ids: set[str] = set()
-
-        for entry_id, entry in config_entries.items():
+        for entry in self._hass.config_entries.async_entries(OVMS_DOMAIN):
             config = {**entry.data, **entry.options}
-            entry_data = ovms_entries.get(entry_id, {})
-            ovms_client = entry_data.get("mqtt_client")
-            client_config = getattr(ovms_client, "config", None)
-            if isinstance(client_config, dict):
-                config.update(client_config)
-            entry_configs[entry_id] = config
-
             vehicle_id = str(config.get("vehicle_id", "")).strip()
             if vehicle_id:
                 wanted_vehicle_ids.add(vehicle_id)
-
-        # The panel can list configured vehicles even when their broker is
-        # temporarily unavailable.
+                entry_vehicle_ids[entry.entry_id] = vehicle_id
         self._allowed_vehicle_ids = wanted_vehicle_ids
+        self._entry_vehicle_ids = entry_vehicle_ids
 
-        for entry_id, config in entry_configs.items():
+    async def _async_restore_vehicle_metrics(self) -> None:
+        """Seed metric values from already available OVMS entities."""
+        from homeassistant.helpers import entity_registry as er
 
-            signature = self._mqtt_config_signature(config)
-            if self._entry_signatures.get(entry_id) == signature and entry_id in self._mqtt_clients:
-                continue
+        registry = er.async_get(self._hass)
+        for entry_id, vehicle_id in self._entry_vehicle_ids.items():
+            for entity in er.async_entries_for_config_entry(registry, entry_id):
+                state = self._hass.states.get(entity.entity_id)
+                if state is not None:
+                    await self._async_process_ovms_state(
+                        vehicle_id, state.attributes.get("topic", ""), state,
+                        initial=True,
+                    )
 
-            old_client = self._mqtt_clients.pop(entry_id, None)
-            if old_client is not None:
-                await self._hass.async_add_executor_job(old_client.loop_stop)
-                await self._hass.async_add_executor_job(old_client.disconnect)
+    @callback
+    def _async_state_changed(self, event: Event) -> None:
+        """Process state changes from entities owned by the OVMS integration."""
+        if self._started:
+            self._hass.async_create_task(self._async_process_state_change(event))
 
-            try:
-                client = await self._async_start_mqtt_client(entry_id, config)
-            except Exception as ex:
-                _LOGGER.warning(
-                    "Unable to start MQTT listener for OVMS vehicle %s: %s",
-                    config.get("vehicle_id", entry_id),
-                    ex,
-                )
-                client = None
-            if client is not None:
-                self._entry_signatures[entry_id] = signature
-            else:
-                self._entry_signatures.pop(entry_id, None)
+    async def _async_process_state_change(self, event: Event) -> None:
+        """Resolve a changed entity to its OVMS vehicle and process its value."""
+        from homeassistant.helpers import entity_registry as er
 
-        removed_entry_ids = set(self._mqtt_clients) - set(entry_configs)
-        for entry_id in removed_entry_ids:
-            client = self._mqtt_clients.pop(entry_id)
-            await self._hass.async_add_executor_job(client.loop_stop)
-            await self._hass.async_add_executor_job(client.disconnect)
-            self._entry_signatures.pop(entry_id, None)
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        registry_entry = er.async_get(self._hass).async_get(
+            new_state.entity_id
+        )
+        if (
+            registry_entry is None
+            or registry_entry.platform != OVMS_DOMAIN
+            or registry_entry.config_entry_id not in self._entry_vehicle_ids
+        ):
+            return
+        await self._async_process_ovms_state(
+            self._entry_vehicle_ids[registry_entry.config_entry_id],
+            new_state.attributes.get("topic", ""),
+            new_state,
+        )
 
-    @staticmethod
-    def _mqtt_topic_filter(config: dict[str, Any]) -> str:
-        """Build the subscription topic from an OVMS topic structure."""
-        topic_prefix = str(config.get("topic_prefix", "ovms")).strip("/")
-        vehicle_id = str(config.get("vehicle_id", "")).strip()
-        mqtt_username = str(
-            config.get("mqtt_username") or config.get("username") or ""
-        ).strip()
-        structure = str(
-            config.get("topic_structure")
-            or "{prefix}/{mqtt_username}/{vehicle_id}"
-        ).strip("/")
-        try:
-            topic = structure.format(
-                prefix=topic_prefix,
-                mqtt_username=mqtt_username,
-                vehicle_id=vehicle_id,
-            ).strip("/")
-        except (KeyError, ValueError):
-            _LOGGER.warning("Invalid OVMS topic structure: %s", structure)
-            topic = topic_prefix
-        return f"{topic}/#" if topic else "#"
+    async def _async_process_ovms_state(
+        self,
+        vehicle_id: str,
+        topic: str,
+        state: Any,
+        *,
+        initial: bool = False,
+    ) -> None:
+        """Use the OVMS entity topic and state to update a trip."""
+        if not topic or state.state in {"unknown", "unavailable"}:
+            return
+        parts = topic.strip("/").split("/")
+        value = str(state.state).strip()
+
+        if "event" in parts:
+            event_parts = parts[parts.index("event") + 1 :]
+            if initial:
+                return
+            event_name = "/".join(event_parts)
+            if event_name == "vehicle/on":
+                await self._async_start_trip(vehicle_id)
+            elif event_name == "vehicle/off":
+                await self._async_stop_trip(vehicle_id)
+            return
+
+        if "metric" not in parts:
+            return
+        metric = "/".join(parts[parts.index("metric") + 1 :])
+        if metric in {"v/e/on", "v.e.on"}:
+            if initial:
+                return
+            if value.lower() in {"yes", "on", "1", "true"}:
+                await self._async_start_trip(vehicle_id)
+            elif value.lower() in {"no", "off", "0", "false"}:
+                await self._async_stop_trip(vehicle_id)
+            return
+        if metric.endswith(("/utc", ".utc")):
+            timestamp = state.attributes.get("timestamp_object")
+            if timestamp is not None:
+                value = timestamp.isoformat() if hasattr(timestamp, "isoformat") else str(timestamp)
+        await self._async_update_metric(vehicle_id, metric, value)
 
     def _async_ovms_entry_changed(
         self, change: ConfigEntryChange, entry: ConfigEntry
     ) -> None:
-        """Synchronize immediately when an OVMS config entry changes."""
+        """Synchronize vehicle mappings when an OVMS config entry changes."""
         if self._started and entry.domain == OVMS_DOMAIN:
             self._hass.async_create_task(self._async_sync_ovms_entries())
-
-    @staticmethod
-    def _mqtt_config_signature(config: dict[str, Any]) -> tuple[Any, ...]:
-        """Build a stable config signature for MQTT client restarts."""
-        return (
-            config.get("host"),
-            config.get("port"),
-            config.get("protocol"),
-            config.get("username"),
-            config.get("password"),
-            config.get("verify_ssl", True),
-            config.get("topic_prefix", "ovms"),
-            config.get("topic_structure"),
-            config.get("vehicle_id"),
-        )
 
     async def async_save(self) -> None:
         """Persist trip data."""
@@ -271,45 +227,6 @@ class TripStore:
         self._data.setdefault("trips", []).append(trip)
         await self.async_save()
         return trip
-
-    async def _async_mqtt_message(
-        self, message, vehicle_id: str | None = None
-    ) -> None:
-        """Handle OVMS event and metric messages."""
-        parts = message.topic.split("/")
-        if "event" in parts:
-            marker = parts.index("event")
-        elif "metric" in parts:
-            marker = parts.index("metric")
-        else:
-            return
-        if marker < 1:
-            return
-        vehicle_id = vehicle_id or parts[marker - 1]
-        if self._allowed_vehicle_ids and vehicle_id not in self._allowed_vehicle_ids:
-            return
-        if "event" in parts:
-            event_index = parts.index("event")
-            event = "/".join(parts[event_index + 1:])
-            if event == "vehicle/on":
-                await self._async_start_trip(vehicle_id)
-            elif event == "vehicle/off":
-                await self._async_stop_trip(vehicle_id)
-            return
-
-        if "metric" not in parts:
-            return
-        metric_index = parts.index("metric")
-        metric = "/".join(parts[metric_index + 1:])
-        value = message.payload.decode(
-            errors="replace").strip().replace("km", "")
-        if metric in {"v/e/on", "v.e.on"}:
-            if value.lower() in {"yes", "on", "1", "true"}:
-                await self._async_start_trip(vehicle_id)
-            elif value.lower() in {"no", "off", "0", "false"}:
-                await self._async_stop_trip(vehicle_id)
-            return
-        await self._async_update_metric(vehicle_id, metric, value)
 
     async def _async_start_trip(self, vehicle_id: str) -> None:
         state = self._vehicles.setdefault(
