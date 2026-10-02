@@ -256,14 +256,15 @@ test("traduit les libellés selon la langue Home Assistant avec repli anglais", 
     assert.equal(panel.t("trips"), "Trips");
 });
 
-test("getTileUrl() bascule entre les tuiles claires et sombres selon le thème Home Assistant", () => {
+test("getTileUrl() utilise les tuiles OpenStreetMap sans clé API", () => {
     const { panel } = createPanelWithFakeLeaflet();
 
     panel._hass = {};
-    assert.match(panel.getTileUrl(), /light_all/);
+    assert.equal(panel.getTileUrl(), "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
 
     panel._hass = { themes: { darkMode: true } };
-    assert.match(panel.getTileUrl(), /dark_all/);
+    assert.equal(panel.getTileUrl(), "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
+    assert.match(panel.getTileAttribution(), /openstreetmap\.org\/copyright/);
 });
 
 test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et les marqueurs de départ/arrivée", async () => {
