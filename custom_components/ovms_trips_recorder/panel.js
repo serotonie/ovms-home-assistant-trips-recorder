@@ -7183,10 +7183,10 @@
 			return loadLeafletModule();
 		}
 		getTileUrl() {
-			return `https://{s}.basemaps.cartocdn.com/${Boolean(this._hass?.themes?.darkMode) ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+			return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 		}
 		getTileAttribution() {
-			return "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors &copy; <a href=\"https://carto.com/attributions\">CARTO</a>";
+			return "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors";
 		}
 		getEndpointMarkerStyle(color) {
 			return {
