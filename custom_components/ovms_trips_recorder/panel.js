@@ -7179,7 +7179,7 @@
 				else this.loadTrips();
 			}, TRIP_UPDATED_EVENT);
 		}
-		getLeaflet() {
+		loadLeaflet() {
 			return loadLeafletModule();
 		}
 		getTileUrl() {
@@ -7372,7 +7372,7 @@
 		async renderLeafletMapsNow() {
 			const containers = this.shadowRoot.querySelectorAll(".trip-map-canvas");
 			if (!containers.length) return;
-			const Leaflet = await this.getLeaflet();
+			const Leaflet = await this.loadLeaflet();
 			if (!Leaflet) return;
 			containers.forEach((container) => {
 				const index = Number(container.dataset.index);

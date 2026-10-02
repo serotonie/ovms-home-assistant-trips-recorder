@@ -8,7 +8,7 @@
 // executed here in a sandboxed vm context with minimal DOM/customElements
 // stubs instead of adding a browser test framework dependency. Leaflet
 // itself is replaced with a lightweight fake (see createFakeLeaflet) through
-// TripsRecorderPanel#getLeaflet so these tests don't need a real DOM/canvas.
+// TripsRecorderPanel#loadLeaflet so these tests don't need a real DOM/canvas.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -166,7 +166,7 @@ function createPanelWithFakeLeaflet(options = {}) {
     });
     const panel = new TripsRecorderPanel();
     const fakeLeaflet = createFakeLeaflet();
-    panel.getLeaflet = () => fakeLeaflet;
+    panel.loadLeaflet = () => fakeLeaflet;
     return { panel, fakeLeaflet };
 }
 

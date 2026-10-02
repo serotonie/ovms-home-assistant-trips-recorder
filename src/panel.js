@@ -110,7 +110,7 @@ class TripsRecorderPanel extends HTMLElement {
     // Leaflet (and its stylesheet) is bundled directly into panel.js by Vite,
     // so the map is always available locally instead of depending on Home
     // Assistant's internal, undocumented ha-map/loadCardHelpers() APIs.
-    getLeaflet() {
+    loadLeaflet() {
         return loadLeafletModule();
     }
 
@@ -351,7 +351,7 @@ class TripsRecorderPanel extends HTMLElement {
     async renderLeafletMapsNow() {
         const containers = this.shadowRoot.querySelectorAll(".trip-map-canvas");
         if (!containers.length) return;
-        const Leaflet = await this.getLeaflet();
+        const Leaflet = await this.loadLeaflet();
         if (!Leaflet) return;
         containers.forEach((container) => {
             const index = Number(container.dataset.index);
