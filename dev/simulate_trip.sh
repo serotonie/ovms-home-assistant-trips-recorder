@@ -100,6 +100,7 @@ for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
     ELAPSED=0
 
     echo "Starting simulated trip ${trip}/${TRIP_COUNT} (${DISTANCE} km)"
+    metric "v/e/on" "yes"
     publish "${BASE}/event/vehicle/on" "vehicle.on"
 
     point=0
@@ -136,6 +137,7 @@ for VEHICLE_ID in $(printf '%s' "$VEHICLE_IDS" | tr ',' ' '); do
     done
 
     publish "${BASE}/event/vehicle/off" "vehicle.off"
+    metric "v/e/on" "no"
     ODOMETER=$(awk -v odometer="$ODOMETER" -v distance="$DISTANCE" \
       'BEGIN { printf "%.1f\n", odometer + distance }')
     CURRENT_TIME=$((CURRENT_TIME + ELAPSED + $(random_int 12 72) * 3600))

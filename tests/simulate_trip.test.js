@@ -13,11 +13,11 @@ const SIMULATOR = path.join(ROOT, "dev", "simulate_trip.sh");
 function runSimulator(topicStructure) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ovms-simulator-"));
     const binDirectory = path.join(directory, "bin");
-    const topicsPath = path.join(directory, "topics");
+    const messagesPath = path.join(directory, "messages");
     fs.mkdirSync(binDirectory);
     fs.writeFileSync(
         path.join(binDirectory, "mosquitto_pub"),
-        "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-t\" ]; then\n    shift\n    printf '%s\\n' \"$1\" >> \"$TOPIC_CAPTURE\"\n  fi\n  shift\ndone\n"
+        "#!/bin/sh\ntopic=\nmessage=\nwhile [ \"$#\" -gt 0 ]; do\n  case \"$1\" in\n    -t) shift; topic=$1 ;;\n    -m) shift; message=$1 ;;\n  esac\n  shift\ndone\nprintf '%s|%s\\n' \"$topic\" \"$message\" >> \"$MESSAGE_CAPTURE\"\n"
     );
     fs.writeFileSync(path.join(binDirectory, "sleep"), "#!/bin/sh\nexit 0\n");
     fs.chmodSync(path.join(binDirectory, "mosquitto_pub"), 0o755);
@@ -29,7 +29,7 @@ function runSimulator(topicStructure) {
         env: {
             ...process.env,
             PATH: `${binDirectory}:${process.env.PATH}`,
-            TOPIC_CAPTURE: topicsPath,
+            MESSAGE_CAPTURE: messagesPath,
             OVMS_TOPIC_STRUCTURE: topicStructure,
             OVMS_TRIP_COUNT: "1",
             OVMS_TRIP_PAUSE: "0",
@@ -37,10 +37,10 @@ function runSimulator(topicStructure) {
             OVMS_TOPIC_USERNAME: "demo",
         },
     });
-    const topics = fs.readFileSync(topicsPath, "utf8").trim().split("\n");
+    const messages = fs.readFileSync(messagesPath, "utf8").trim().split("\n");
     fs.rmSync(directory, { recursive: true, force: true });
     assert.equal(result.status, 0, result.stderr);
-    return topics;
+    return messages;
 }
 
 test("le simulateur publie sur chaque structure OVMS prise en charge", () => {
@@ -52,10 +52,12 @@ test("le simulateur publie sur chaque structure OVMS prise en charge", () => {
     };
 
     for (const [structure, base] of Object.entries(structures)) {
-        const topics = runSimulator(structure);
-        assert.ok(topics.length > 0, `aucun topic publié pour ${structure}`);
-        assert.ok(topics.every((topic) => topic.startsWith(`${base}/`)));
-        assert.ok(topics.includes(`${base}/event/vehicle/on`));
-        assert.ok(topics.includes(`${base}/event/vehicle/off`));
+        const messages = runSimulator(structure);
+        assert.ok(messages.length > 0, `aucun topic publié pour ${structure}`);
+        assert.ok(messages.every((message) => message.startsWith(`${base}/`)));
+        assert.ok(messages.includes(`${base}/event/vehicle/on|vehicle.on`));
+        assert.ok(messages.includes(`${base}/event/vehicle/off|vehicle.off`));
+        assert.ok(messages.includes(`${base}/metric/v/e/on|yes`));
+        assert.ok(messages.includes(`${base}/metric/v/e/on|no`));
     }
 });
