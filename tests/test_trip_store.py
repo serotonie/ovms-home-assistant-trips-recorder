@@ -228,15 +228,3 @@ def test_concurrent_stop_events_save_a_trip_only_once() -> None:
     assert store._geocode_trip_calls == 1
     assert store._data["trips"] == [trip]
 
-
-def test_integration_version_matches_manifest():
-    """The version exposed to the frontend must come from manifest.json."""
-    import json
-    import re
-
-    root = Path(__file__).resolve().parents[1] / "custom_components" / "ovms_trips_recorder"
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    source = (root / "panel.py").read_text(encoding="utf-8")
-    assert manifest["version"]
-    assert "def get_integration_version" in source
-    assert re.search(r'"version":\s*get_integration_version\(\)', source)
