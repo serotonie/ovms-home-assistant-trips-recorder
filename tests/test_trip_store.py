@@ -1,4 +1,4 @@
-"""Regression tests for OVMS MQTT discovery in the trip store."""
+"""Regression tests for OVMS entity listening in the trip store."""
 
 from __future__ import annotations
 
@@ -19,6 +19,10 @@ def _install_home_assistant_stubs() -> None:
 
     core = types.ModuleType("homeassistant.core")
     core.HomeAssistant = object
+    core.Event = object
+    core.callback = lambda func: func
+    const = types.ModuleType("homeassistant.const")
+    const.EVENT_STATE_CHANGED = "state_changed"
 
     dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
     dispatcher.async_dispatcher_connect = lambda *args: None
@@ -36,6 +40,7 @@ def _install_home_assistant_stubs() -> None:
         {
             "homeassistant": homeassistant,
             "homeassistant.config_entries": config_entries,
+            "homeassistant.const": const,
             "homeassistant.core": core,
             "homeassistant.helpers": helpers,
             "homeassistant.helpers.dispatcher": dispatcher,
@@ -61,42 +66,25 @@ spec.loader.exec_module(trip_store)
 TripStore = trip_store.TripStore
 
 
-def test_mqtt_topic_filter_supports_all_ovms_topic_structures() -> None:
-    """Every topic structure accepted by OVMS must be subscribed to here."""
-    base_config = {
-        "topic_prefix": "ovms",
-        "mqtt_username": "driver",
-        "vehicle_id": "DEMO",
-    }
-
-    expected_topics = {
-        "{prefix}/{mqtt_username}/{vehicle_id}": "ovms/driver/DEMO/#",
-        "{prefix}/client/{vehicle_id}": "ovms/client/DEMO/#",
-        "{prefix}/{vehicle_id}": "ovms/DEMO/#",
-        "garage/{vehicle_id}/telemetry": "garage/DEMO/telemetry/#",
-    }
-
-    for topic_structure, expected_topic in expected_topics.items():
-        config = {**base_config, "topic_structure": topic_structure}
-        assert TripStore._mqtt_topic_filter(config) == expected_topic
-
-
-def test_mqtt_config_signature_changes_with_topic_structure() -> None:
-    """Changing the OVMS topic layout must reconnect the MQTT subscriber."""
-    config = {
-        "host": "broker.example.test",
-        "port": 1883,
-        "vehicle_id": "DEMO",
-        "topic_structure": "{prefix}/{vehicle_id}",
-    }
-    changed_config = {
-        **config,
-        "topic_structure": "{prefix}/client/{vehicle_id}",
-    }
-
-    assert TripStore._mqtt_config_signature(config) != TripStore._mqtt_config_signature(
-        changed_config
+def test_ovms_entries_map_directly_to_vehicle_ids() -> None:
+    """Vehicle lookup uses the parent integration's config entries."""
+    entries = [
+        types.SimpleNamespace(
+            entry_id="entry-1", data={"vehicle_id": "DEMO"}, options={}
+        ),
+        types.SimpleNamespace(
+            entry_id="entry-2", data={}, options={"vehicle_id": "SECOND"}
+        ),
+    ]
+    store = TripStore.__new__(TripStore)
+    store._hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_entries=lambda _domain: entries)
     )
+
+    asyncio.run(store._async_sync_ovms_entries())
+
+    assert store._entry_vehicle_ids == {"entry-1": "DEMO", "entry-2": "SECOND"}
+    assert store._allowed_vehicle_ids == {"DEMO", "SECOND"}
 
 
 def test_configured_vehicles_are_listed_without_received_trips() -> None:
@@ -108,51 +96,96 @@ def test_configured_vehicles_are_listed_without_received_trips() -> None:
     assert asyncio.run(store.async_get_vehicle_ids()) == ["DEMO", "SECOND"]
 
 
-def test_configured_vehicles_are_listed_when_mqtt_connection_fails() -> None:
-    """A broker failure must not hide configured vehicles from the panel."""
-    entry = types.SimpleNamespace(
-        entry_id="entry-1",
-        data={"vehicle_id": "DEMO", "host": "broker", "port": 1883},
-        options={},
-    )
+def test_vehicle_on_and_off_entity_topics_start_and_stop_trips() -> None:
+    """Parent OVMS event entities drive trip lifecycle."""
     store = TripStore.__new__(TripStore)
-    store._hass = types.SimpleNamespace(
-        data={"ovms": {}},
-        config_entries=types.SimpleNamespace(
-            async_entries=lambda domain: [entry]),
+    seen = []
+
+    async def start(vehicle_id: str) -> None:
+        seen.append(("start", vehicle_id))
+
+    async def stop(vehicle_id: str) -> None:
+        seen.append(("stop", vehicle_id))
+
+    store._async_start_trip = start
+    store._async_stop_trip = stop
+    asyncio.run(
+        store._async_process_ovms_state(
+            "DEMO",
+            "ovms/demo/car-1/event/vehicle/on",
+            types.SimpleNamespace(state="vehicle.on", attributes={}),
+        )
     )
-    store._mqtt_clients = {}
-    store._entry_signatures = {}
-    store._allowed_vehicle_ids = set()
+    asyncio.run(
+        store._async_process_ovms_state(
+            "DEMO",
+            "ovms/demo/car-1/event/vehicle/off",
+            types.SimpleNamespace(state="vehicle.off", attributes={}),
+        )
+    )
 
-    async def fail_to_start(*args) -> None:
-        raise OSError("broker unavailable")
-
-    store._async_start_mqtt_client = fail_to_start
-
-    asyncio.run(store._async_sync_ovms_entries())
-
-    assert store._allowed_vehicle_ids == {"DEMO"}
+    assert seen == [("start", "DEMO"), ("stop", "DEMO")]
 
 
-def test_custom_topic_uses_the_configured_vehicle_id() -> None:
-    """A custom suffix after the vehicle ID must not change the trip vehicle."""
+def test_initial_event_state_does_not_start_a_phantom_trip() -> None:
+    """Restored event states seed no new trip after restart."""
     store = TripStore.__new__(TripStore)
-    store._allowed_vehicle_ids = {"DEMO"}
-    started_vehicle_ids: list[str] = []
+    started = []
 
     async def start_trip(vehicle_id: str) -> None:
-        started_vehicle_ids.append(vehicle_id)
+        started.append(vehicle_id)
 
     store._async_start_trip = start_trip
-    message = types.SimpleNamespace(
-        topic="garage/DEMO/telemetry/event/vehicle/on",
-        payload=b"vehicle.on",
+    asyncio.run(
+        store._async_process_ovms_state(
+            "DEMO",
+            "ovms/demo/car-1/event/vehicle/on",
+            types.SimpleNamespace(state="vehicle.on", attributes={}),
+            initial=True,
+        )
     )
 
-    asyncio.run(store._async_mqtt_message(message, vehicle_id="DEMO"))
+    assert started == []
 
-    assert started_vehicle_ids == ["DEMO"]
+
+def test_metric_entities_pass_topic_and_state_to_trip_store() -> None:
+    """The parent entity's topic identifies the metric to record."""
+    store = TripStore.__new__(TripStore)
+    updates = []
+
+    async def update_metric(vehicle_id: str, metric: str, value: str) -> None:
+        updates.append((vehicle_id, metric, value))
+
+    store._async_update_metric = update_metric
+    asyncio.run(
+        store._async_process_ovms_state(
+            "DEMO",
+            "ovms/demo/car-1/metric/v/p/latitude",
+            types.SimpleNamespace(state="46.644623", attributes={}),
+        )
+    )
+
+    assert updates == [("DEMO", "v/p/latitude", "46.644623")]
+
+
+def test_metric_state_on_entity_also_starts_trip() -> None:
+    """The parent integration's v/e/on metric remains a lifecycle fallback."""
+    store = TripStore.__new__(TripStore)
+    started = []
+
+    async def start_trip(vehicle_id: str) -> None:
+        started.append(vehicle_id)
+
+    store._async_start_trip = start_trip
+    asyncio.run(
+        store._async_process_ovms_state(
+            "DEMO",
+            "ovms/demo/car-1/metric/v/e/on",
+            types.SimpleNamespace(state="yes", attributes={}),
+        )
+    )
+
+    assert started == ["DEMO"]
 
 
 def test_concurrent_stop_events_save_a_trip_only_once() -> None:

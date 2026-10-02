@@ -3,8 +3,8 @@
 OVMS Home Assistant Trips Recorder is a Home Assistant component for recording trips and displaying them in a sidebar panel.
 
 It uses the OVMS Home Assistant integration to retrieve the vehicle and broker
-configuration, then opens a dedicated MQTT connection to record trips. The OVMS
-integration is available here:
+configuration and records trips from entities created by the OVMS integration.
+The parent integration handles the MQTT connection. It is available here:
 
 https://github.com/enoch85/ovms-home-assistant
 
@@ -34,7 +34,7 @@ custom_components/
 
 1. Add this repository as a custom HACS repository.
 2. Install "OVMS Trips Recorder".
-3. Also install the OVMS Home Assistant integration for MQTT management.
+3. Also install and configure the OVMS Home Assistant integration.
 4. Restart Home Assistant.
 5. In Home Assistant, go to **Settings → Devices & Services → Add
    Integration**, then add **OVMS Trips Recorder**.
@@ -179,7 +179,7 @@ addresses are missing, but the GPS coordinates are preserved.
 
 ## Tests
 
-Regression tests cover the sidebar panel and OVMS MQTT topic discovery.
+Regression tests cover the sidebar panel and trip recording from OVMS entities.
 
 From the repository root, run:
 
@@ -189,8 +189,8 @@ pytest -q tests/test_trip_store.py
 npm test
 ```
 
-This executes the Python MQTT regression tests and the Node.js panel test suite
-in the [`tests/`](tests/) directory.
+This executes the Python entity-listener regression tests and the Node.js panel
+test suite in the [`tests/`](tests/) directory.
 
 ### End-to-End Test
 
@@ -203,26 +203,14 @@ trips are returned by the panel API. To run this check locally:
 OVMS_PATH=../ovms-home-assistant tests/integration/run.sh
 ```
 
-## MQTT Dependency
+## OVMS Entity Dependency
 
-The component automatically retrieves the configuration of the OVMS entries
-already installed in Home Assistant and opens a dedicated MQTT connection for
-each OVMS broker. It therefore does not assume that the MQTT broker configured
-in Home Assistant is the same one used by OVMS.
-
-It uses OVMS topics to:
-- detect `vehicle/on` and `vehicle/off` events
-- record position, time, odometer, and distance metrics
-- store trips at the appropriate time
-- expose trip history in the sidebar panel
-
-The broker settings (`host`, `port`, credentials, TLS, topic prefix, and topic
-structure) are read from the OVMS integration configuration. The recorder
-subscribes using the configured OVMS structure, including the standard
-`{prefix}/{mqtt_username}/{vehicle_id}`, `{prefix}/client/{vehicle_id}`, and
-`{prefix}/{vehicle_id}` layouts, as well as a custom structure using the same
-placeholders. You must therefore install and configure at least one OVMS entry
-before using this component.
+The recorder listens to state changes from entities created by the parent OVMS
+integration. It uses their topic attributes and states to detect trip start and
+stop events and collect position, time, odometer, and distance metrics. The
+recorder does not open a separate MQTT connection or need broker credentials;
+the parent integration remains responsible for receiving OVMS MQTT data. Install
+and configure at least one OVMS entry before using this component.
 
 ## Storage
 
@@ -252,4 +240,3 @@ dependencies retain their respective licenses:
 | --- | --- | --- |
 | [geopy](https://github.com/geopy/geopy) | MIT | [License](https://github.com/geopy/geopy/blob/master/LICENSE) |
 | [geographiclib](https://github.com/geographiclib/geographiclib-python) | MIT | [License](https://github.com/geographiclib/geographiclib-python/blob/main/LICENSE) |
-| [paho-mqtt](https://github.com/eclipse-paho/paho.mqtt.python) | EPL-2.0 or BSD-3-Clause | [License](https://github.com/eclipse-paho/paho.mqtt.python/blob/master/LICENSE.txt) |
