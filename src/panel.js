@@ -14,6 +14,7 @@ function loadLeafletModule() {
 }
 
 const PANEL_API = "/api/ovms_trips_recorder/trips";
+const VERSION_STORAGE_KEY = "ovms_trips_recorder_frontend_version";
 const TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
 
 const TRANSLATIONS = {
@@ -39,6 +40,23 @@ const TRANSLATIONS = {
     "zh-Hant": { trips: "行程", trip: "行程", tripsPlural: "行程", from: "開始", to: "結束", vehicle: "車輛", allVehicles: "所有車輛", reset: "重設", noTrips: "沒有符合這些條件的行程。", loadingTrips: "無法載入行程。", ongoing: "進行中", gpsPosition: "已記錄 GPS 位置", start: "出發", arrival: "抵達" },
     ko: { trips: "주행 기록", trip: "주행", tripsPlural: "주행 기록", from: "시작", to: "종료", vehicle: "차량", allVehicles: "모든 차량", reset: "초기화", noTrips: "조건에 맞는 주행이 없습니다.", loadingTrips: "주행 기록을 불러올 수 없습니다.", ongoing: "진행 중", gpsPosition: "GPS 위치가 기록되었습니다", start: "출발", arrival: "도착" },
 };
+
+async function checkFrontendVersion(version) {
+    if (!version) return false;
+    try {
+        const known = window.localStorage.getItem(VERSION_STORAGE_KEY);
+        window.localStorage.setItem(VERSION_STORAGE_KEY, version);
+        if (known === null || known === version) return false;
+        if (window.caches) {
+            const keys = await window.caches.keys();
+            await Promise.all(keys.map((key) => window.caches.delete(key)));
+        }
+        window.location.reload();
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
 
 class TripsRecorderPanel extends HTMLElement {
     constructor() {
@@ -138,6 +156,7 @@ class TripsRecorderPanel extends HTMLElement {
             const response = await fetch(PANEL_API);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            if (await checkFrontendVersion(data.version)) return;
             this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
             this.updateTrips(data.trips || []);
         } catch (error) {

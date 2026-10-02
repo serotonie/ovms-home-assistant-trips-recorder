@@ -17,7 +17,7 @@ from .const import (
     PANEL_PATH,
     PANEL_TITLE,
 )
-from .panel import async_setup_panel
+from .panel import async_setup_panel, get_integration_version
 from .trip_store import TripStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ async def _async_setup_integration(
         hass=hass,
         frontend_url_path=PANEL_PATH,
         webcomponent_name="trips-recorder-panel",
-        module_url=f"/api/{PANEL_PATH}/panel.js",
+        module_url=f"/api/{PANEL_PATH}/panel.js?v={get_integration_version()}",
         sidebar_title=PANEL_TITLE,
         sidebar_icon=PANEL_ICON,
         embed_iframe=False,

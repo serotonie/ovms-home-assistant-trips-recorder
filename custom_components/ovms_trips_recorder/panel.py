@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from aiohttp import web
@@ -9,6 +10,12 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_TRIP_STORE, DOMAIN, PANEL_PATH, PANEL_TITLE
+
+
+def get_integration_version() -> str:
+    """Return the integration version from manifest.json."""
+    manifest = Path(__file__).with_name("manifest.json")
+    return json.loads(manifest.read_text(encoding="utf-8")).get("version", "")
 
 
 class TripsRecorderApiView(HomeAssistantView):
@@ -32,6 +39,7 @@ class TripsRecorderApiView(HomeAssistantView):
                 "trips": trips,
                 "vehicles": vehicles,
                 "count": len(trips),
+                "version": get_integration_version(),
             }
         )
 
