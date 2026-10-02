@@ -1,4 +1,4 @@
-"""Regression tests for OVMS MQTT discovery in the trip store."""
+"""Regression tests for OVMS entity listening in the trip store."""
 
 from __future__ import annotations
 

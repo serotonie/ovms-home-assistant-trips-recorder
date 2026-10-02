@@ -115,7 +115,9 @@ class TripStore:
                 state = self._hass.states.get(entity.entity_id)
                 if state is not None:
                     await self._async_process_ovms_state(
-                        vehicle_id, state.attributes.get("topic", ""), state,
+                        vehicle_id,
+                        state.attributes.get("topic", ""),
+                        state,
                         initial=True,
                     )
 
@@ -132,9 +134,7 @@ class TripStore:
         new_state = event.data.get("new_state")
         if new_state is None:
             return
-        registry_entry = er.async_get(self._hass).async_get(
-            new_state.entity_id
-        )
+        registry_entry = er.async_get(self._hass).async_get(new_state.entity_id)
         if (
             registry_entry is None
             or registry_entry.platform != OVMS_DOMAIN
@@ -158,7 +158,12 @@ class TripStore:
         """Use the OVMS entity topic and state to update a trip."""
         if not topic or state.state in {"unknown", "unavailable"}:
             return
-        parts = topic.strip("/").split("/")
+        entity_parts = state.attributes.get("parts")
+        parts = (
+            [str(part) for part in entity_parts]
+            if isinstance(entity_parts, list)
+            else topic.strip("/").split("/")
+        )
         value = str(state.state).strip()
 
         if "event" in parts:
@@ -183,10 +188,16 @@ class TripStore:
             elif value.lower() in {"no", "off", "0", "false"}:
                 await self._async_stop_trip(vehicle_id)
             return
+        if initial and self._vehicles.get(vehicle_id, {}).get("trip") is not None:
+            return
         if metric.endswith(("/utc", ".utc")):
             timestamp = state.attributes.get("timestamp_object")
             if timestamp is not None:
-                value = timestamp.isoformat() if hasattr(timestamp, "isoformat") else str(timestamp)
+                value = (
+                    timestamp.isoformat()
+                    if hasattr(timestamp, "isoformat")
+                    else str(timestamp)
+                )
         await self._async_update_metric(vehicle_id, metric, value)
 
     def _async_ovms_entry_changed(

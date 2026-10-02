@@ -189,8 +189,8 @@ pytest -q tests/test_trip_store.py
 npm test
 ```
 
-This executes the Python entity-listener regression tests and the Node.js panel test suite
-in the [`tests/`](tests/) directory.
+This executes the Python entity-listener regression tests and the Node.js panel
+test suite in the [`tests/`](tests/) directory.
 
 ### End-to-End Test
 
