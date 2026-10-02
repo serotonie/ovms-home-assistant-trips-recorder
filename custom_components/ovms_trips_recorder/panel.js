@@ -7361,7 +7361,9 @@
 			this.renderLeafletMaps();
 		}
 		renderLeafletMaps() {
-			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(() => this.renderLeafletMapsNow());
+			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(() => this.renderLeafletMapsNow()).catch((error) => {
+				console?.error?.("Failed to render trip map", error);
+			});
 			return this._mapRenderQueue;
 		}
 		async renderLeafletMapsNow() {

@@ -334,10 +334,15 @@ class TripsRecorderPanel extends HTMLElement {
         // getLeaflet() (lazy-loaded once) and the per-container "do we already
         // have a map" check below involve an await, so overlapping calls could
         // otherwise create duplicate Leaflet map instances for the same
-        // container.
+        // container. Errors are swallowed on the stored queue (not just the
+        // previous link) so a failed render never surfaces as an unhandled
+        // promise rejection when renderLeafletMaps() isn't called again.
         this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve())
             .catch(() => { })
-            .then(() => this.renderLeafletMapsNow());
+            .then(() => this.renderLeafletMapsNow())
+            .catch((error) => {
+                console?.error?.("Failed to render trip map", error);
+            });
         return this._mapRenderQueue;
     }
 
