@@ -227,3 +227,4 @@ def test_concurrent_stop_events_save_a_trip_only_once() -> None:
 
     assert store._geocode_trip_calls == 1
     assert store._data["trips"] == [trip]
+

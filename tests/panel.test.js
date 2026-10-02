@@ -365,3 +365,55 @@ test("destroyLeafletMaps() supprime les cartes Leaflet suivies", async () => {
     assert.equal(fakeLeaflet.maps[0].removed, true);
     assert.equal(panel.maps.size, 0);
 });
+
+function createVersionPanel({ stored, version }) {
+    const store = new Map();
+    if (stored !== undefined) store.set("ovms_trips_recorder_frontend_version", stored);
+    const deleted = [];
+    const win = {
+        localStorage: {
+            getItem: (key) => (store.has(key) ? store.get(key) : null),
+            setItem: (key, value) => store.set(key, value),
+        },
+        caches: {
+            keys: async () => ["a", "b"],
+            delete: async (key) => deleted.push(key),
+        },
+        location: { reloads: 0, reload() { this.reloads += 1; } },
+    };
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: win,
+        fetchImpl: async () => ({ ok: true, json: async () => ({ trips: [], version }) }),
+    });
+    const panel = new TripsRecorderPanel();
+    panel.updateTrips = () => { panel.updated = true; };
+    return { panel, win, store, deleted };
+}
+
+test("loadTrips() enregistre la version au premier chargement sans vider le cache", async () => {
+    const { panel, win, store, deleted } = createVersionPanel({ version: "2.0.0" });
+    await panel.loadTrips();
+    assert.equal(store.get("ovms_trips_recorder_frontend_version"), "2.0.0");
+    assert.equal(win.location.reloads, 0);
+    assert.deepEqual(deleted, []);
+    assert.equal(panel.updated, true);
+});
+
+test("loadTrips() ne recharge pas quand la version est inchangée", async () => {
+    const { panel, win, deleted } = createVersionPanel({ stored: "2.0.0", version: "2.0.0" });
+    await panel.loadTrips();
+    assert.equal(win.location.reloads, 0);
+    assert.deepEqual(deleted, []);
+});
+
+test("loadTrips() vide les caches et recharge quand la version change", async () => {
+    const { panel, win, store, deleted } = createVersionPanel({ stored: "1.0.0", version: "2.0.0" });
+    await panel.loadTrips();
+    assert.deepEqual(deleted, ["a", "b"]);
+    assert.equal(win.location.reloads, 1);
+    assert.equal(store.get("ovms_trips_recorder_frontend_version"), "2.0.0");
+    assert.equal(panel.updated, undefined);
+});

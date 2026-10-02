@@ -6783,6 +6783,7 @@
 		return leafletModulePromise;
 	}
 	var PANEL_API = "/api/ovms_trips_recorder/trips";
+	var VERSION_STORAGE_KEY = "ovms_trips_recorder_frontend_version";
 	var TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
 	var TRANSLATIONS = {
 		en: {
@@ -7122,6 +7123,22 @@
 			arrival: "도착"
 		}
 	};
+	async function checkFrontendVersion(version) {
+		if (!version) return false;
+		try {
+			const known = window.localStorage.getItem(VERSION_STORAGE_KEY);
+			window.localStorage.setItem(VERSION_STORAGE_KEY, version);
+			if (known === null || known === version) return false;
+			if (window.caches) {
+				const keys = await window.caches.keys();
+				await Promise.all(keys.map((key) => window.caches.delete(key)));
+			}
+			window.location.reload();
+			return true;
+		} catch (error) {
+			return false;
+		}
+	}
 	var TripsRecorderPanel = class extends HTMLElement {
 		constructor() {
 			super();
@@ -7208,6 +7225,7 @@
 				const response = await fetch(PANEL_API);
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const data = await response.json();
+				if (await checkFrontendVersion(data.version)) return;
 				this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
 				this.updateTrips(data.trips || []);
 			} catch (error) {
