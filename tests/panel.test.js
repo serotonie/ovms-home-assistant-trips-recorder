@@ -317,6 +317,18 @@ test("renderLeafletMaps() réutilise les cartes existantes au lieu d'en recréer
     );
 });
 
+test("renderLeafletMaps() ne crée pas de marqueurs quand le trajet n'a pas de point GPS", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [{ vehicle: "OVMS", waypoints: [] }];
+
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps.length, 1);
+    assert.equal(fakeLeaflet.circleMarkers.length, 0);
+});
+
 test("destroyLeafletMaps() supprime les cartes Leaflet suivies", async () => {
     const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
     const container = { dataset: { index: "0" } };

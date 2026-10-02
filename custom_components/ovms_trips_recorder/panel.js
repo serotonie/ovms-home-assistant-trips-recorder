@@ -7360,7 +7360,11 @@
 			});
 			this.renderLeafletMaps();
 		}
-		async renderLeafletMaps() {
+		renderLeafletMaps() {
+			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(() => this.renderLeafletMapsNow());
+			return this._mapRenderQueue;
+		}
+		async renderLeafletMapsNow() {
 			const containers = this.shadowRoot.querySelectorAll(".trip-map-canvas");
 			if (!containers.length) return;
 			const Leaflet = await this.getLeaflet();
@@ -7387,15 +7391,17 @@
 							color: "#03a9f4",
 							weight: 4
 						}).addTo(map),
-						startMarker: Leaflet.circleMarker(points[0] || [0, 0], this.getEndpointMarkerStyle("#2196f3")).addTo(map),
-						endMarker: Leaflet.circleMarker(points[points.length - 1] || [0, 0], this.getEndpointMarkerStyle("#ff9800")).addTo(map)
+						startMarker: null,
+						endMarker: null
 					};
 					this.maps.set(container, entry);
 					this.observeMapResize(container, entry);
-				} else {
-					entry.path.setLatLngs(points);
-					if (points[0]) entry.startMarker.setLatLng(points[0]);
-					if (points.length) entry.endMarker.setLatLng(points[points.length - 1]);
+				} else entry.path.setLatLngs(points);
+				if (points.length) {
+					if (entry.startMarker) entry.startMarker.setLatLng(points[0]);
+					else entry.startMarker = Leaflet.circleMarker(points[0], this.getEndpointMarkerStyle("#2196f3")).addTo(entry.map);
+					if (entry.endMarker) entry.endMarker.setLatLng(points[points.length - 1]);
+					else entry.endMarker = Leaflet.circleMarker(points[points.length - 1], this.getEndpointMarkerStyle("#ff9800")).addTo(entry.map);
 				}
 				this.fitMapToPoints(entry.map, points);
 			});

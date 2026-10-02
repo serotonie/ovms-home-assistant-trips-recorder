@@ -329,7 +329,19 @@ class TripsRecorderPanel extends HTMLElement {
         this.renderLeafletMaps();
     }
 
-    async renderLeafletMaps() {
+    renderLeafletMaps() {
+        // Chain onto any in-flight render instead of running concurrently: both
+        // getLeaflet() (lazy-loaded once) and the per-container "do we already
+        // have a map" check below involve an await, so overlapping calls could
+        // otherwise create duplicate Leaflet map instances for the same
+        // container.
+        this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve())
+            .catch(() => { })
+            .then(() => this.renderLeafletMapsNow());
+        return this._mapRenderQueue;
+    }
+
+    async renderLeafletMapsNow() {
         const containers = this.shadowRoot.querySelectorAll(".trip-map-canvas");
         if (!containers.length) return;
         const Leaflet = await this.getLeaflet();
@@ -349,19 +361,22 @@ class TripsRecorderPanel extends HTMLElement {
                     maxZoom: 19,
                 }).addTo(map);
                 const path = Leaflet.polyline(points, { color: "#03a9f4", weight: 4 }).addTo(map);
-                const startMarker = Leaflet.circleMarker(points[0] || [0, 0], this.getEndpointMarkerStyle("#2196f3")).addTo(map);
-                const endMarker = Leaflet.circleMarker(points[points.length - 1] || [0, 0], this.getEndpointMarkerStyle("#ff9800")).addTo(map);
-                entry = { map, path, startMarker, endMarker };
+                entry = { map, path, startMarker: null, endMarker: null };
                 this.maps.set(container, entry);
                 this.observeMapResize(container, entry);
             } else {
                 entry.path.setLatLngs(points);
-                if (points[0]) entry.startMarker.setLatLng(points[0]);
-                if (points.length) entry.endMarker.setLatLng(points[points.length - 1]);
+            }
+            if (points.length) {
+                if (entry.startMarker) entry.startMarker.setLatLng(points[0]);
+                else entry.startMarker = Leaflet.circleMarker(points[0], this.getEndpointMarkerStyle("#2196f3")).addTo(entry.map);
+                if (entry.endMarker) entry.endMarker.setLatLng(points[points.length - 1]);
+                else entry.endMarker = Leaflet.circleMarker(points[points.length - 1], this.getEndpointMarkerStyle("#ff9800")).addTo(entry.map);
             }
             this.fitMapToPoints(entry.map, points);
         });
     }
+
 
     fitMapToPoints(map, points) {
         if (!points.length) return;
