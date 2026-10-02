@@ -156,12 +156,13 @@ function loadPanelModule({ customElements, document, window, fetchImpl, ResizeOb
     return customElements.get("trips-recorder-panel");
 }
 
-function createPanelWithFakeLeaflet() {
+function createPanelWithFakeLeaflet(options = {}) {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
         customElements,
         document: { createElement: () => ({}) },
         window: {},
+        ResizeObserver: options.ResizeObserver,
     });
     const panel = new TripsRecorderPanel();
     const fakeLeaflet = createFakeLeaflet();
@@ -329,6 +330,31 @@ test("renderLeafletMaps() ne crée pas de marqueurs quand le trajet n'a pas de p
     assert.equal(fakeLeaflet.circleMarkers.length, 0);
 });
 
+test("observeMapResize() réajuste la carte sur les points du trajet après un redimensionnement", async () => {
+    const observers = [];
+    class FakeResizeObserver {
+        constructor(callback) {
+            this.callback = callback;
+            observers.push(this);
+        }
+        observe() { }
+        disconnect() { }
+    }
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet({ ResizeObserver: FakeResizeObserver });
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [
+        { vehicle: "OVMS", waypoints: [{ position_lat: "48.0", position_long: "2.0" }, { position_lat: "48.1", position_long: "2.1" }] },
+    ];
+
+    await panel.renderLeafletMaps();
+    const fitBoundsCallsBeforeResize = fakeLeaflet.maps[0].fitBoundsCalls;
+    observers[0].callback([{ contentRect: { width: 320, height: 260 } }]);
+
+    assert.equal(fakeLeaflet.maps[0].invalidated, 1);
+    assert.equal(fakeLeaflet.maps[0].fitBoundsCalls, fitBoundsCallsBeforeResize + 1);
+});
+
 test("destroyLeafletMaps() supprime les cartes Leaflet suivies", async () => {
     const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
     const container = { dataset: { index: "0" } };
@@ -336,7 +362,7 @@ test("destroyLeafletMaps() supprime les cartes Leaflet suivies", async () => {
     panel.filteredTrips = [{ vehicle: "OVMS", waypoints: [] }];
 
     await panel.renderLeafletMaps();
-    panel.destroyLeafletMaps();
+    await panel.destroyLeafletMaps();
 
     assert.equal(fakeLeaflet.maps[0].removed, true);
     assert.equal(panel.maps.size, 0);

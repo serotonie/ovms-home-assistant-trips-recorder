@@ -330,18 +330,20 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     renderLeafletMaps() {
-        // Chain onto any in-flight render instead of running concurrently: both
-        // getLeaflet() (lazy-loaded once) and the per-container "do we already
-        // have a map" check below involve an await, so overlapping calls could
-        // otherwise create duplicate Leaflet map instances for the same
-        // container. Errors are swallowed on the stored queue (not just the
-        // previous link) so a failed render never surfaces as an unhandled
-        // promise rejection when renderLeafletMaps() isn't called again.
+        return this.queueMapTask(() => this.renderLeafletMapsNow());
+    }
+
+    // Both renderLeafletMapsNow() (creating/updating maps) and
+    // destroyLeafletMaps() (tearing them down, e.g. from render()/disconnectedCallback())
+    // are asynchronous/queued through here so that a destroy triggered by a
+    // fresh render() can never race with and prematurely remove maps that a
+    // still in-flight render is in the middle of creating.
+    queueMapTask(task) {
         this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve())
             .catch(() => { })
-            .then(() => this.renderLeafletMapsNow())
+            .then(task)
             .catch((error) => {
-                console?.error?.("Failed to render trip map", error);
+                console?.error?.("Failed to update trip maps", error);
             });
         return this._mapRenderQueue;
     }
@@ -366,11 +368,12 @@ class TripsRecorderPanel extends HTMLElement {
                     maxZoom: 19,
                 }).addTo(map);
                 const path = Leaflet.polyline(points, { color: "#03a9f4", weight: 4 }).addTo(map);
-                entry = { map, path, startMarker: null, endMarker: null };
+                entry = { map, path, startMarker: null, endMarker: null, points };
                 this.maps.set(container, entry);
                 this.observeMapResize(container, entry);
             } else {
                 entry.path.setLatLngs(points);
+                entry.points = points;
             }
             if (points.length) {
                 if (entry.startMarker) entry.startMarker.setLatLng(points[0]);
@@ -381,7 +384,6 @@ class TripsRecorderPanel extends HTMLElement {
             this.fitMapToPoints(entry.map, points);
         });
     }
-
 
     fitMapToPoints(map, points) {
         if (!points.length) return;
@@ -397,12 +399,17 @@ class TripsRecorderPanel extends HTMLElement {
         const observer = new ResizeObserver(([size]) => {
             if (!size.contentRect.width || !size.contentRect.height) return;
             entry.map.invalidateSize();
+            this.fitMapToPoints(entry.map, entry.points);
         });
         observer.observe(container);
         entry.resizeObserver = observer;
     }
 
     destroyLeafletMaps() {
+        return this.queueMapTask(() => this.destroyLeafletMapsNow());
+    }
+
+    destroyLeafletMapsNow() {
         this.maps.forEach((entry) => {
             entry.resizeObserver?.disconnect();
             entry.map.remove();

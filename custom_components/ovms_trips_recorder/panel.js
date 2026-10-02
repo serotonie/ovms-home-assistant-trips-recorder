@@ -7361,8 +7361,11 @@
 			this.renderLeafletMaps();
 		}
 		renderLeafletMaps() {
-			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(() => this.renderLeafletMapsNow()).catch((error) => {
-				console?.error?.("Failed to render trip map", error);
+			return this.queueMapTask(() => this.renderLeafletMapsNow());
+		}
+		queueMapTask(task) {
+			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(task).catch((error) => {
+				console?.error?.("Failed to update trip maps", error);
 			});
 			return this._mapRenderQueue;
 		}
@@ -7394,11 +7397,15 @@
 							weight: 4
 						}).addTo(map),
 						startMarker: null,
-						endMarker: null
+						endMarker: null,
+						points
 					};
 					this.maps.set(container, entry);
 					this.observeMapResize(container, entry);
-				} else entry.path.setLatLngs(points);
+				} else {
+					entry.path.setLatLngs(points);
+					entry.points = points;
+				}
 				if (points.length) {
 					if (entry.startMarker) entry.startMarker.setLatLng(points[0]);
 					else entry.startMarker = Leaflet.circleMarker(points[0], this.getEndpointMarkerStyle("#2196f3")).addTo(entry.map);
@@ -7421,11 +7428,15 @@
 			const observer = new ResizeObserver(([size]) => {
 				if (!size.contentRect.width || !size.contentRect.height) return;
 				entry.map.invalidateSize();
+				this.fitMapToPoints(entry.map, entry.points);
 			});
 			observer.observe(container);
 			entry.resizeObserver = observer;
 		}
 		destroyLeafletMaps() {
+			return this.queueMapTask(() => this.destroyLeafletMapsNow());
+		}
+		destroyLeafletMapsNow() {
 			this.maps.forEach((entry) => {
 				entry.resizeObserver?.disconnect();
 				entry.map.remove();
