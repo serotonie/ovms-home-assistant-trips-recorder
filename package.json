@@ -4,6 +4,14 @@
   "version": "0.1.0",
   "description": "Regression tests for the Trips Recorder sidebar panel.",
   "scripts": {
+    "build": "vite build",
+    "pretest": "npm run build",
     "test": "node --test 'tests/**/*.test.js'"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "vite": "^8.3.2"
   }
 }

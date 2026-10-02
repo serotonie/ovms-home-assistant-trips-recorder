@@ -6,6 +6,9 @@ venv/
 __pycache__/
 *.pyc
 
+# Node dependencies
+node_modules/
+
 # Home Assistant development instance
 dev/ha-config/.storage/
 dev/ha-config/.cache/

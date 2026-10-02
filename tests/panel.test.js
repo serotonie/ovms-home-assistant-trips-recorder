@@ -1,10 +1,14 @@
 "use strict";
 
-// Regression tests for the ha-map loading logic in panel.js (see
-// TripsRecorderPanel#ensureMapDefined). panel.js is a plain browser script
-// (not a module), so it is executed here in a sandboxed vm context with
-// minimal DOM/customElements/window stubs instead of adding a browser test
-// framework dependency.
+// Regression tests for the Trips Recorder sidebar panel. panel.js is built
+// by Vite (see vite.config.mjs) from src/panel.js into
+// custom_components/ovms_trips_recorder/panel.js, bundling Leaflet directly
+// instead of depending on Home Assistant's internal ha-map/loadCardHelpers()
+// APIs. The build output is a plain IIFE script (not a module), so it is
+// executed here in a sandboxed vm context with minimal DOM/customElements
+// stubs instead of adding a browser test framework dependency. Leaflet
+// itself is replaced with a lightweight fake (see createFakeLeaflet) through
+// TripsRecorderPanel#loadLeaflet so these tests don't need a real DOM/canvas.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -39,33 +43,104 @@ class FakeHTMLElement {
 
 function createCustomElementRegistry() {
     const registry = new Map();
-    const waiters = new Map();
     return {
         define(name, ctor) {
             registry.set(name, ctor);
-            const pending = waiters.get(name);
-            if (pending) {
-                pending.forEach((resolve) => resolve(ctor));
-                waiters.delete(name);
-            }
         },
         get(name) {
             return registry.get(name);
         },
         whenDefined(name) {
-            if (registry.has(name)) return Promise.resolve(registry.get(name));
-            return new Promise((resolve) => {
-                const list = waiters.get(name) || [];
-                list.push(resolve);
-                waiters.set(name, list);
-            });
+            return registry.has(name) ? Promise.resolve(registry.get(name)) : new Promise(() => { });
         },
     };
 }
 
-function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver, MutationObserver }) {
+function createFakeMapInstance() {
+    return {
+        layers: [],
+        addLayer(layer) {
+            this.layers.push(layer);
+        },
+        setView(center, zoom) {
+            this.center = center;
+            this.zoom = zoom;
+        },
+        fitBounds(points, options) {
+            this.fitBoundsCalls = (this.fitBoundsCalls || 0) + 1;
+            this.fitBoundsPoints = points;
+            this.fitBoundsOptions = options;
+        },
+        invalidateSize() {
+            this.invalidated = (this.invalidated || 0) + 1;
+        },
+        remove() {
+            this.removed = true;
+        },
+    };
+}
+
+function createFakeLeaflet() {
+    const maps = [];
+    const tileLayers = [];
+    const polylines = [];
+    const circleMarkers = [];
+    return {
+        maps,
+        tileLayers,
+        polylines,
+        circleMarkers,
+        map(container, options) {
+            const map = createFakeMapInstance();
+            map.container = container;
+            map.options = options;
+            maps.push(map);
+            return map;
+        },
+        tileLayer(url, options) {
+            const layer = {
+                url, options,
+                addTo(map) {
+                    map.addLayer(this);
+                    return this;
+                },
+            };
+            tileLayers.push(layer);
+            return layer;
+        },
+        polyline(points, options) {
+            const layer = {
+                points, options,
+                setLatLngs(nextPoints) {
+                    this.points = nextPoints;
+                },
+                addTo(map) {
+                    map.addLayer(this);
+                    return this;
+                },
+            };
+            polylines.push(layer);
+            return layer;
+        },
+        circleMarker(point, options) {
+            const marker = {
+                point, options,
+                setLatLng(nextPoint) {
+                    this.point = nextPoint;
+                },
+                addTo(map) {
+                    map.addLayer(this);
+                    return this;
+                },
+            };
+            circleMarkers.push(marker);
+            return marker;
+        },
+    };
+}
+
+function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver }) {
     const sandbox = {
-        module: { exports: {} },
         HTMLElement: FakeHTMLElement,
         customElements,
         document,
@@ -75,187 +150,28 @@ function loadPanelModule({ customElements, document, window, fetchImpl, ResizeOb
         clearTimeout,
         console,
         ResizeObserver,
-        MutationObserver,
     };
     vm.createContext(sandbox);
     new vm.Script(PANEL_SOURCE, { filename: "panel.js" }).runInContext(sandbox);
-    return sandbox.module.exports.TripsRecorderPanel;
+    return customElements.get("trips-recorder-panel");
 }
 
-test("ensureMapDefined() ne force rien si ha-map est déjà défini", async () => {
+function createPanelWithFakeLeaflet(options = {}) {
     const customElements = createCustomElementRegistry();
-    customElements.define("ha-map", class { });
-    let resolverCreated = false;
-    const document = {
-        createElement(tag) {
-            resolverCreated = resolverCreated || tag === "partial-panel-resolver";
-            return {};
-        },
-    };
-    const TripsRecorderPanel = loadPanelModule({ customElements, document, window: {} });
-    const panel = new TripsRecorderPanel();
-
-    await panel.ensureMapDefined();
-
-    assert.equal(resolverCreated, false);
-});
-
-test("masque les marqueurs Leaflet sans modifier les chemins natifs", () => {
-    const customElements = createCustomElementRegistry();
-    const style = {};
-    const root = {
-        querySelector: () => null,
-        appendChild: (element) => { root.style = element; },
-    };
-    const TripsRecorderPanel = loadPanelModule({
-        customElements,
-        document: { createElement: () => style },
-        window: {},
-    });
-    const panel = new TripsRecorderPanel();
-    panel.hideNativePathMarkers({ shadowRoot: root });
-
-    assert.equal(root.style.id, "trips-recorder-path-markers");
-    assert.match(root.style.textContent, /leaflet-overlay-pane/);
-});
-
-test("réaffiche le premier et le dernier marqueur natifs avec leurs couleurs", () => {
-    const customElements = createCustomElementRegistry();
-    const TripsRecorderPanel = loadPanelModule({ customElements, document: { createElement: () => ({}) }, window: {} });
-    const panel = new TripsRecorderPanel();
-    const markers = [{ style: {} }, { style: {} }, { style: {} }];
-
-    panel.showNativeEndpointMarkers({
-        shadowRoot: { querySelectorAll: () => markers },
-    });
-
-    assert.match(markers[0].style.cssText, /#2196f3/);
-    assert.equal(markers[1].style.cssText, undefined);
-    assert.match(markers[2].style.cssText, /#ff9800/);
-});
-
-test("attend les marqueurs natifs ajoutés après le premier rendu", () => {
-    const customElements = createCustomElementRegistry();
-    let observer;
-    class FakeMutationObserver {
-        constructor(callback) {
-            this.callback = callback;
-            observer = this;
-        }
-        observe() { }
-        disconnect() {
-            this.disconnected = true;
-        }
-    }
-    const markers = [{ style: {} }, { style: {} }];
-    let rendered = false;
     const TripsRecorderPanel = loadPanelModule({
         customElements,
         document: { createElement: () => ({}) },
         window: {},
-        MutationObserver: FakeMutationObserver,
+        ResizeObserver: options.ResizeObserver,
     });
     const panel = new TripsRecorderPanel();
-    panel.showNativeEndpointMarkers({
-        shadowRoot: { querySelectorAll: () => rendered ? markers : [] },
-    });
+    const fakeLeaflet = createFakeLeaflet();
+    panel.loadLeaflet = () => fakeLeaflet;
+    return { panel, fakeLeaflet };
+}
 
-    rendered = true;
-    observer.callback();
-
-    assert.match(markers[0].style.cssText, /#2196f3/);
-    assert.match(markers[1].style.cssText, /#ff9800/);
-    assert.equal(observer.disconnected, true);
-});
-
-test("force le chargement du panneau Lovelace pour obtenir loadCardHelpers puis définit ha-map", async () => {
+test("renderTrips() affiche un conteneur de carte au-dessus des détails de chaque trajet", () => {
     const customElements = createCustomElementRegistry();
-    customElements.define("partial-panel-resolver", class { });
-    const calls = [];
-    const createdTags = [];
-    const routeConfigs = [];
-    const window = {};
-    const document = {
-        createElement(tag) {
-            // Ne pas faire d'assertions ici : cette fonction est appelée depuis le
-            // try/catch de forceLoadLovelacePanel(), qui avalerait silencieusement
-            // toute AssertionError et masquerait un vrai échec de test.
-            createdTags.push(tag);
-            return {
-                _getRoutes(config) {
-                    routeConfigs.push(config);
-                    return {
-                        routes: {
-                            "trips-recorder-map-preload": {
-                                async load() {
-                                    window.loadCardHelpers = async () => ({
-                                        createCardElement(cardConfig) {
-                                            calls.push(cardConfig);
-                                            customElements.define("ha-map", class { });
-                                        },
-                                    });
-                                },
-                            },
-                        },
-                    };
-                },
-            };
-        },
-    };
-    const TripsRecorderPanel = loadPanelModule({ customElements, document, window });
-    const panel = new TripsRecorderPanel();
-
-    await panel.ensureMapDefined();
-
-    // JSON round-trip comparison: values built inside the vm sandbox have a
-    // different Object/Array prototype than this test realm, so
-    // assert.deepEqual (reference-sensitive) reports false positives on
-    // otherwise structurally identical plain objects.
-    assert.deepEqual(createdTags, ["partial-panel-resolver"]);
-    assert.equal(
-        JSON.stringify(routeConfigs),
-        JSON.stringify([[{ component_name: "lovelace", url_path: "trips-recorder-map-preload" }]])
-    );
-    assert.ok(customElements.get("ha-map"), "ha-map devrait être défini après ensureMapDefined()");
-    assert.equal(JSON.stringify(calls), JSON.stringify([{ type: "map", entities: [] }]));
-});
-
-test("se rabat sur waitForCardHelpers() si l'API interne partial-panel-resolver échoue", async () => {
-    const customElements = createCustomElementRegistry();
-    customElements.define("partial-panel-resolver", class { });
-    const window = {
-        loadCardHelpers: async () => ({
-            createCardElement() {
-                customElements.define("ha-map", class { });
-            },
-        }),
-    };
-    const document = {
-        // Pas de _getRoutes ici : simule une future rupture de cette API interne.
-        createElement: () => ({}),
-    };
-    const TripsRecorderPanel = loadPanelModule({ customElements, document, window });
-    const panel = new TripsRecorderPanel();
-
-    await panel.ensureMapDefined();
-
-    assert.ok(customElements.get("ha-map"));
-});
-
-test("waitForCardHelpers() abandonne proprement si loadCardHelpers n'apparaît jamais", async () => {
-    const customElements = createCustomElementRegistry();
-    const document = { createElement: () => ({}) };
-    const TripsRecorderPanel = loadPanelModule({ customElements, document, window: {} });
-    const panel = new TripsRecorderPanel();
-
-    const result = await panel.waitForCardHelpers(50, 10);
-
-    assert.equal(result, null);
-});
-
-test("renderTrips() affiche une carte au-dessus des détails de chaque trajet", () => {
-    const customElements = createCustomElementRegistry();
-    customElements.define("ha-map", class { });
     const document = { createElement: () => ({}) };
     const olderTrip = { start_time: "2026-09-20T10:00:00Z", vehicle: "OVMS", waypoints: [] };
     const newerTrip = { start_time: "2026-09-21T10:00:00Z", vehicle: "OVMS", waypoints: [] };
@@ -265,8 +181,7 @@ test("renderTrips() affiche une carte au-dessus des détails de chaque trajet", 
 
     const markup = panel.renderTrips();
 
-    assert.equal((markup.match(/class="native-map"/g) || []).length, 2);
-    assert.doesNotMatch(markup, /auto-fit/);
+    assert.equal((markup.match(/class="trip-map-canvas"/g) || []).length, 2);
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
@@ -341,89 +256,114 @@ test("traduit les libellés selon la langue Home Assistant avec repli anglais", 
     assert.equal(panel.t("trips"), "Trips");
 });
 
-test("renderNativeMaps() configure la carte de chaque trajet", async () => {
-    const customElements = createCustomElementRegistry();
-    const document = { createElement: () => ({ style: {} }) };
+test("getTileUrl() bascule entre les tuiles claires et sombres selon le thème Home Assistant", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+
+    panel._hass = {};
+    assert.match(panel.getTileUrl(), /light_all/);
+
+    panel._hass = { themes: { darkMode: true } };
+    assert.match(panel.getTileUrl(), /dark_all/);
+});
+
+test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et les marqueurs de départ/arrivée", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container0 = { dataset: { index: "0" } };
+    const container1 = { dataset: { index: "1" } };
+    panel.shadowRoot.querySelectorAll = (selector) => selector === ".trip-map-canvas" ? [container0, container1] : [];
+    panel.filteredTrips = [
+        {
+            vehicle: "OVMS 1", waypoints: [
+                { position_lat: "48.0", position_long: "2.0" },
+                { position_lat: "48.1", position_long: "2.1" },
+            ],
+        },
+        {
+            vehicle: "OVMS 2", waypoints: [
+                { position_lat: "49.0", position_long: "3.0" },
+            ],
+        },
+    ];
+
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps.length, 2);
+    assert.equal(JSON.stringify(fakeLeaflet.polylines[0].points), JSON.stringify([[48, 2], [48.1, 2.1]]));
+    assert.equal(JSON.stringify(fakeLeaflet.circleMarkers[0].point), JSON.stringify([48, 2]));
+    assert.equal(fakeLeaflet.circleMarkers[0].options.fillColor, "#2196f3");
+    assert.equal(JSON.stringify(fakeLeaflet.circleMarkers[1].point), JSON.stringify([48.1, 2.1]));
+    assert.equal(fakeLeaflet.circleMarkers[1].options.fillColor, "#ff9800");
+    assert.equal(JSON.stringify(fakeLeaflet.maps[0].fitBoundsPoints), JSON.stringify([[48, 2], [48.1, 2.1]]));
+    // A single waypoint cannot be fitted into bounds, so it falls back to setView().
+    assert.equal(JSON.stringify(fakeLeaflet.maps[1].center), JSON.stringify([49, 3]));
+    assert.equal(fakeLeaflet.maps[1].zoom, 15);
+});
+
+test("renderLeafletMaps() réutilise les cartes existantes au lieu d'en recréer", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [
+        { vehicle: "OVMS", waypoints: [{ position_lat: "48.0", position_long: "2.0" }, { position_lat: "48.1", position_long: "2.1" }] },
+    ];
+
+    await panel.renderLeafletMaps();
+    panel.filteredTrips[0].waypoints.push({ position_lat: "48.2", position_long: "2.2" });
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps.length, 1);
+    assert.equal(
+        JSON.stringify(fakeLeaflet.polylines[0].points),
+        JSON.stringify([[48, 2], [48.1, 2.1], [48.2, 2.2]])
+    );
+});
+
+test("renderLeafletMaps() ne crée pas de marqueurs quand le trajet n'a pas de point GPS", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [{ vehicle: "OVMS", waypoints: [] }];
+
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps.length, 1);
+    assert.equal(fakeLeaflet.circleMarkers.length, 0);
+});
+
+test("observeMapResize() réajuste la carte sur les points du trajet après un redimensionnement", async () => {
     const observers = [];
     class FakeResizeObserver {
         constructor(callback) {
             this.callback = callback;
             observers.push(this);
         }
-        observe(target) {
-            this.target = target;
-        }
-        disconnect() {
-            this.disconnected = true;
-        }
+        observe() { }
+        disconnect() { }
     }
-    const TripsRecorderPanel = loadPanelModule({
-        customElements,
-        document,
-        window: {},
-        ResizeObserver: FakeResizeObserver,
-    });
-    const panel = new TripsRecorderPanel();
-    const connection = {};
-    panel._hass = { connection };
-    const maps = ["0", "1"].map((index) => ({
-        dataset: { index },
-        _engine: {
-            addPath(path) {
-                this.path = path;
-                return { remove() { } };
-            },
-        },
-        addEventListener(event, handler, options) {
-            this.readyListener = { event, handler, options };
-        },
-        fitBounds(points) {
-            this.fitBoundsCalls = (this.fitBoundsCalls || 0) + 1;
-            this.fitBoundsPoints = points;
-        },
-        setView(center, zoom) {
-            this.center = center;
-            this.zoom = zoom;
-        },
-    }));
-    panel.shadowRoot.querySelectorAll = (selector) => selector === ".native-map" ? maps : [];
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet({ ResizeObserver: FakeResizeObserver });
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
     panel.filteredTrips = [
-        {
-            vehicle: "OVMS 1", waypoints: [
-                { position_lat: "48.0", position_long: "2.0", timestamp: "2026-09-20T10:00:00Z" },
-                { position_lat: "48.1", position_long: "2.1", timestamp: "2026-09-20T10:05:00Z" },
-            ]
-        },
-        {
-            vehicle: "OVMS 2", waypoints: [
-                { position_lat: "49.0", position_long: "3.0", timestamp: "2026-09-21T10:00:00Z" },
-                { position_lat: "49.1", position_long: "3.1", timestamp: "2026-09-21T10:05:00Z" },
-            ]
-        },
+        { vehicle: "OVMS", waypoints: [{ position_lat: "48.0", position_long: "2.0" }, { position_lat: "48.1", position_long: "2.1" }] },
     ];
 
-    panel.renderNativeMaps();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    assert.equal(maps[0]._connection.connection, connection);
-    assert.equal(maps[0].paths[0].name, "OVMS 1");
-    assert.deepEqual(JSON.parse(JSON.stringify(maps[0].paths[0].points.map((point) => point.point))), [[48, 2], [48.1, 2.1]]);
-    assert.deepEqual(JSON.parse(JSON.stringify(maps[0].fitBoundsPoints)), [[48, 2], [48.1, 2.1]]);
-    assert.deepEqual(JSON.parse(JSON.stringify(maps[1].fitBoundsPoints)), [[49, 3], [49.1, 3.1]]);
-    assert.deepEqual(JSON.parse(JSON.stringify(maps[0].center)), [48.05, 2.05]);
-    assert.equal(maps[0].zoom, undefined);
-    assert.equal(maps[0].autoFit, true);
-    assert.deepEqual(JSON.parse(JSON.stringify(maps[0].editableLocations)), []);
+    await panel.renderLeafletMaps();
+    const fitBoundsCallsBeforeResize = fakeLeaflet.maps[0].fitBoundsCalls;
     observers[0].callback([{ contentRect: { width: 320, height: 260 } }]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(observers[0].disconnected, true);
-    assert.equal(maps[0].fitBoundsCalls, 2);
-    assert.equal(maps[0].readyListener.event, "editing-available-changed");
-    assert.equal(maps[0].readyListener.options.once, true);
-    maps[0].readyListener.handler();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(maps[0].fitBoundsCalls, 3);
+
+    assert.equal(fakeLeaflet.maps[0].invalidated, 1);
+    assert.equal(fakeLeaflet.maps[0].fitBoundsCalls, fitBoundsCallsBeforeResize + 1);
+});
+
+test("destroyLeafletMaps() supprime les cartes Leaflet suivies", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [{ vehicle: "OVMS", waypoints: [] }];
+
+    await panel.renderLeafletMaps();
+    await panel.destroyLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps[0].removed, true);
+    assert.equal(panel.maps.size, 0);
 });
