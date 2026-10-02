@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend panel with Vite
+        run: npm run build
+
+      - name: Fail if the built panel.js is out of date
+        run: |
+          if ! git diff --quiet -- custom_components/ovms_trips_recorder/panel.js; then
+            echo "::error::custom_components/ovms_trips_recorder/panel.js is out of date. Run 'npm run build' and commit the result."
+            git diff -- custom_components/ovms_trips_recorder/panel.js
+            exit 1
+          fi
