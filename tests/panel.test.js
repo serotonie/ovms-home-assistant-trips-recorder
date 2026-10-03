@@ -256,6 +256,56 @@ test("traduit les libellés selon la langue Home Assistant avec repli anglais", 
     assert.equal(panel.t("trips"), "Trips");
 });
 
+test("formatDate() uses the Home Assistant configured timezone", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+    panel._hass = {
+        locale: { language: "en" },
+        config: { time_zone: "America/New_York" },
+    };
+    panel.locale = panel.getLocale();
+
+    assert.equal(panel.formatDate("2026-01-01T12:00:00Z"), "Jan 1, 2026, 7:00 AM");
+});
+
+test("applyFilters() compares trip dates in the Home Assistant timezone, falling back to browser local time", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+    const trip = { start_time: "2026-01-01T02:00:00Z", vehicle: "OVMS" };
+    const values = { "#from": "2025-12-31", "#to": "2025-12-31", "#vehicle": "" };
+    panel.shadowRoot.querySelector = (selector) => ({ value: values[selector] });
+    panel.trips = [trip];
+    panel._hass = { config: { time_zone: "America/New_York" } };
+
+    panel.applyFilters(false);
+
+    assert.deepEqual(panel.filteredTrips, [trip]);
+
+    const localDate = new Date(trip.start_time);
+    const pad = (value) => String(value).padStart(2, "0");
+    values["#from"] = [
+        localDate.getFullYear(),
+        pad(localDate.getMonth() + 1),
+        pad(localDate.getDate()),
+    ].join("-");
+    values["#to"] = values["#from"];
+    panel._hass = { config: {} };
+
+    panel.applyFilters(false);
+
+    assert.deepEqual(panel.filteredTrips, [trip]);
+});
+
 test("getTileUrl() utilise les tuiles OpenStreetMap sans clé d'API", () => {
     const { panel } = createPanelWithFakeLeaflet();
 

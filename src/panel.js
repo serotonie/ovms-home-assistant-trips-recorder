@@ -202,17 +202,31 @@ class TripsRecorderPanel extends HTMLElement {
             vehicle: this.shadowRoot.querySelector("#vehicle")?.value || "",
         };
         const { from, to, vehicle } = this.filters;
-        const fromDate = from ? new Date(`${from}T00:00:00`) : null;
-        const toDate = to ? new Date(`${to}T23:59:59`) : null;
+        const dateFormatter = from || to
+            ? new Intl.DateTimeFormat("en-CA", {
+                timeZone: this._hass?.config?.time_zone || undefined,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            })
+            : null;
         this.filteredTrips = this.trips.filter((trip) => {
             const start = new Date(trip.start_time);
+            const tripDate = dateFormatter ? this.getCalendarDate(start, dateFormatter) : "";
             return (
-                (!fromDate || start >= fromDate) &&
-                (!toDate || start <= toDate) &&
+                (!from || (tripDate && tripDate >= from)) &&
+                (!to || (tripDate && tripDate <= to)) &&
                 (!vehicle || trip.vehicle === vehicle)
             );
         });
         if (render) this.render();
+    }
+
+    getCalendarDate(date, formatter) {
+        if (Number.isNaN(date.getTime())) return "";
+        const parts = formatter.formatToParts(date);
+        const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+        return `${values.year}-${values.month}-${values.day}`;
     }
 
     formatDate(value) {
@@ -220,6 +234,7 @@ class TripsRecorderPanel extends HTMLElement {
             ? new Date(value).toLocaleString(this.locale, {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: this._hass?.config?.time_zone || undefined,
             })
             : this.t("ongoing");
     }
