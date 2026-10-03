@@ -7271,7 +7271,8 @@
 		formatDate(value) {
 			return value ? new Date(value).toLocaleString(this.locale, {
 				dateStyle: "medium",
-				timeStyle: "short"
+				timeStyle: "short",
+				timeZone: this._hass?.config?.time_zone || void 0
 			}) : this.t("ongoing");
 		}
 		getLocale() {
