@@ -220,6 +220,7 @@ class TripsRecorderPanel extends HTMLElement {
             ? new Date(value).toLocaleString(this.locale, {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: this._hass?.config?.time_zone || undefined,
             })
             : this.t("ongoing");
     }

@@ -256,6 +256,23 @@ test("traduit les libellés selon la langue Home Assistant avec repli anglais", 
     assert.equal(panel.t("trips"), "Trips");
 });
 
+test("formatDate() uses the Home Assistant configured timezone", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+    panel._hass = {
+        locale: { language: "en" },
+        config: { time_zone: "America/New_York" },
+    };
+    panel.locale = panel.getLocale();
+
+    assert.equal(panel.formatDate("2026-01-01T12:00:00Z"), "Jan 1, 2026, 7:00 AM");
+});
+
 test("getTileUrl() utilise les tuiles OpenStreetMap sans clé d'API", () => {
     const { panel } = createPanelWithFakeLeaflet();
 
