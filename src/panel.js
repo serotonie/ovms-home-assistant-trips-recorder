@@ -280,35 +280,39 @@ class TripsRecorderPanel extends HTMLElement {
         .panel-content { min-height: 100%; }
         main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
         .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-        .summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: var(--ha-space-4, 24px); }
-        .eyebrow { color: var(--primary-color); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-        .muted { color: var(--secondary-text-color); }
-        .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 18px; }
-        label { display: grid; gap: 5px; color: var(--secondary-text-color); font-size: 12px; font-weight: 700; }
-        input, select { min-height: 40px; padding: 8px 10px; color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-border-radius-sm, 4px); font: inherit; }
-        .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+        .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
+        .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
+        .filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
+        input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
+        input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+        .filters ha-button { align-self: end; }
+        .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
         ha-card { overflow: hidden; }
-        .trip { display: grid; min-width: 0; }
-        .trip-map { height: 260px; background: var(--secondary-background-color); }
+        .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
+        .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
         .trip-map-canvas { display: block; width: 100%; height: 100%; }
-        .trip-details { padding: 16px; }
+        .trip-details { display: flex; flex-direction: column; padding: 16px; }
         .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .trip-title { font-weight: 700; }
-        .vehicle { color: var(--primary-color); font-size: 12px; font-weight: 700; }
+        .trip-head { align-items: flex-start; }
+        .trip-title { font-size: var(--ha-font-size-m, 16px); font-weight: 600; }
+        .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
         .route { display: grid; grid-template-columns: 14px 1fr; gap: 9px; margin-top: 14px; }
         .route-line { display: grid; grid-template-rows: 9px 1fr 9px; justify-items: center; }
         .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary-color); }
         .dot.stop { background: var(--accent-color); }
         .connector { width: 1px; background: var(--divider-color); }
-        .address { min-height: 38px; color: var(--secondary-text-color); font-size: 12px; line-height: 1.45; }
-        .trip-foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: 12px; }
-        .distance { color: var(--primary-text-color); font-size: 18px; font-weight: 700; }
-        .empty { padding: 32px 18px; color: var(--secondary-text-color); text-align: center; }
-        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .summary { display: block; } .trips-grid { grid-template-columns: 1fr; } }
+        .address { min-height: 38px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
+        .address strong { color: var(--primary-text-color); font-weight: 500; }
+        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
+        .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
+        .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
+        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
       </style>
       <main>
                 <h1 class="visually-hidden">${this.t("trips")}</h1>
-                <div class="summary"><div class="eyebrow">OVMS / Home Assistant</div><div class="muted">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</div></div>
+                <div class="summary"><span class="trip-count">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</span></div>
         <form class="filters">
                     <label>${this.t("from")} <input id="from" type="date"></label>
                     <label>${this.t("to")} <input id="to" type="date"></label>

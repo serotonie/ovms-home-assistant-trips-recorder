@@ -185,7 +185,7 @@ test("renderTrips() affiche un conteneur de carte au-dessus des détails de chaq
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
-test("render() adds the standard Home Assistant header shell", () => {
+test("render() uses the Home Assistant shell and theme-aligned filters", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
         customElements,
@@ -200,6 +200,11 @@ test("render() adds the standard Home Assistant header shell", () => {
     assert.match(panel.shadowRoot.innerHTML, /<ha-menu-button slot="navigationIcon" aria-label="Menu"><\/ha-menu-button>/);
     assert.match(panel.shadowRoot.innerHTML, /<span slot="title">Trips<\/span>/);
     assert.match(panel.shadowRoot.innerHTML, /<h1 class="visually-hidden">Trips<\/h1>/);
+    assert.match(panel.shadowRoot.innerHTML, /class="trip-count">0 Trips<\/span>/);
+    assert.match(panel.shadowRoot.innerHTML, /background: var\(--card-background-color\)/);
+    assert.match(panel.shadowRoot.innerHTML, /var\(--ha-card-border-radius, 12px\)/);
+    assert.match(panel.shadowRoot.innerHTML, /@media \(max-width: 520px\)/);
+    assert.doesNotMatch(panel.shadowRoot.innerHTML, /OVMS \/ Home Assistant/);
 });
 
 test("renderError() keeps the standard Home Assistant header shell", () => {
