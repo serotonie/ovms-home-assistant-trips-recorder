@@ -188,6 +188,66 @@ def test_metric_state_on_entity_also_starts_trip() -> None:
     assert started == ["DEMO"]
 
 
+def test_waypoint_waits_for_updated_coordinates_timestamp_and_distance() -> None:
+    """A waypoint uses four metrics updated since the previous waypoint."""
+    store = TripStore.__new__(TripStore)
+    trip = {
+        "vehicle": "DEMO",
+        "start_time": None,
+        "start_point_lat": -1,
+        "start_point_long": -1,
+        "waypoints": [],
+    }
+    store._vehicles = {
+        "DEMO": {
+            "trip": trip,
+            "latitude": 46.0,
+            "longitude": 6.0,
+            "gpshdop": -1,
+            "odometer": -1,
+            "distance": 0,
+            "timestamp": None,
+            "updated_metrics": set(),
+        }
+    }
+    store._data = {"trips": [], "active": {"DEMO": trip}}
+
+    async def save() -> None:
+        pass
+
+    store.async_save = save
+    store._schedule_timeout = lambda _vehicle_id: None
+
+    async def update_metrics() -> None:
+        await store._async_update_metric("DEMO", "v/p/latitude", "46.1")
+        assert trip["waypoints"] == []
+        await store._async_update_metric(
+            "DEMO", "v/p/utc", "2026-10-16T12:00:00+00:00"
+        )
+        await store._async_update_metric("DEMO", "v/p/distance", "1.5")
+        assert trip["waypoints"] == []
+        await store._async_update_metric("DEMO", "v/p/longitude", "6.1")
+        assert trip["waypoints"][-1]["position_lat"] == 46.1
+        assert trip["waypoints"][-1]["position_long"] == 6.1
+        assert trip["waypoints"][-1]["timestamp"] == "2026-10-16T12:00:00+00:00"
+        assert trip["waypoints"][-1]["distance"] == 1.5
+
+        await store._async_update_metric("DEMO", "v/p/longitude", "6.2")
+        await store._async_update_metric("DEMO", "v/p/distance", "2.5")
+        await store._async_update_metric(
+            "DEMO", "v/p/utc", "2026-10-16T12:01:00+00:00"
+        )
+        assert len(trip["waypoints"]) == 1
+        await store._async_update_metric("DEMO", "v/p/latitude", "46.2")
+        assert len(trip["waypoints"]) == 2
+        assert trip["waypoints"][-1]["position_lat"] == 46.2
+        assert trip["waypoints"][-1]["position_long"] == 6.2
+        assert trip["waypoints"][-1]["timestamp"] == "2026-10-16T12:01:00+00:00"
+        assert trip["waypoints"][-1]["distance"] == 2.5
+
+    asyncio.run(update_metrics())
+
+
 def test_concurrent_stop_events_save_a_trip_only_once() -> None:
     """Repeated stop events during geocoding must not duplicate a trip."""
     store = TripStore.__new__(TripStore)
@@ -227,4 +287,3 @@ def test_concurrent_stop_events_save_a_trip_only_once() -> None:
 
     assert store._geocode_trip_calls == 1
     assert store._data["trips"] == [trip]
-

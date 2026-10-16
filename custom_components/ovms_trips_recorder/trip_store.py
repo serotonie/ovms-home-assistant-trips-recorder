@@ -244,6 +244,7 @@ class TripStore:
             vehicle_id, self._new_vehicle_state())
         if state["trip"] is not None:
             return
+        state["updated_metrics"].clear()
         trip = {
             "vehicle": vehicle_id,
             "start_time": None,
@@ -299,6 +300,7 @@ class TripStore:
             try:
                 state["timestamp"] = datetime.fromisoformat(
                     timestamp).isoformat()
+                state["updated_metrics"].add("timestamp")
             except ValueError:
                 pass
         elif metric_name in {
@@ -315,6 +317,10 @@ class TripStore:
                 return
             state["distance" if metric_name ==
                   "trip" else metric_name] = number
+            if metric_name in {"latitude", "longitude"}:
+                state["updated_metrics"].add(metric_name)
+            elif metric_name in {"distance", "trip"}:
+                state["updated_metrics"].add("distance")
         else:
             return
 
@@ -325,9 +331,19 @@ class TripStore:
             trip["start_point_lat"] = state["latitude"]
         if trip["start_point_long"] == -1 and state["longitude"] != -1:
             trip["start_point_long"] = state["longitude"]
-        if state["latitude"] == -1 or state["longitude"] == -1:
+        if (
+            state["latitude"] == -1
+            or state["longitude"] == -1
+            or not {
+                "latitude",
+                "longitude",
+                "timestamp",
+                "distance",
+            } <= state["updated_metrics"]
+        ):
             return
 
+        state["updated_metrics"].clear()
         trip["distance"] = state["distance"]
         waypoint = {
             "timestamp": state["timestamp"] or self._now(),
@@ -356,6 +372,7 @@ class TripStore:
             "distance": 0,
             "timestamp": None,
             "trip": trip,
+            "updated_metrics": set(),
         }
         if trip and trip.get("waypoints"):
             last_waypoint = trip["waypoints"][-1]
