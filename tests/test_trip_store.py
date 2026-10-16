@@ -305,3 +305,159 @@ def test_concurrent_stop_events_save_a_trip_only_once() -> None:
 
     assert store._geocode_trip_calls == 1
     assert store._data["trips"] == [trip]
+
+
+def driver_store(data=None):
+    """Create a real store with in-memory persistence and person states."""
+    saved = []
+    people = [
+        types.SimpleNamespace(entity_id="person.alice", name="Alice"),
+        types.SimpleNamespace(entity_id="person.bob", name="Bob"),
+    ]
+    hass = types.SimpleNamespace(
+        states=types.SimpleNamespace(async_all=lambda domain: people if domain == "person" else []),
+        bus=types.SimpleNamespace(async_fire=lambda *args: None),
+    )
+    store = TripStore(hass)
+    store._allowed_vehicle_ids = {"car", "other"}
+    store._schedule_timeout = lambda vehicle: None
+
+    async def load():
+        return data
+
+    async def save(value):
+        import copy
+
+        saved.append(copy.deepcopy(value))
+
+    store._store = types.SimpleNamespace(async_load=load, async_save=save)
+    return store, saved, people
+
+
+def test_migration_assigns_stable_ids_and_preserves_drivers_and_waypoints() -> None:
+    legacy = {"vehicle": "car", "waypoints": [{"position_lat": 46}]}
+    assigned = {"vehicle": "car", "id": "existing", "driver": "person.bob"}
+    active = {"vehicle": "other", "waypoints": []}
+    data = {
+        "trips": [legacy, assigned], "active": {"other": active},
+        "driver_defaults": {"car": "person.alice", "other": "person.bob"},
+    }
+    store, saved, _ = driver_store(data)
+
+    asyncio.run(store.async_load())
+    assert legacy["driver"] == "person.alice"
+    assert active["driver"] == "person.bob"
+    assert store._vehicles["other"]["trip"] is active
+    assert assigned["driver"] == "person.bob"
+    assert assigned["id"] == "existing"
+    assert legacy["waypoints"] == [{"position_lat": 46}]
+    assert len({legacy["id"], active["id"], assigned["id"]}) == 3
+
+    restored, _, _ = driver_store(saved[-1])
+    asyncio.run(restored.async_load())
+    assert [trip["id"] for trip in asyncio.run(restored.async_get_trips())] == [
+        legacy["id"], "existing", active["id"],
+    ]
+
+
+def test_defaults_backfill_only_matching_unassigned_trips() -> None:
+    store, saved, _ = driver_store()
+    store._data = {
+        "trips": [
+            {"vehicle": "car", "driver": None},
+            {"vehicle": "car", "driver": "person.bob"},
+            {"vehicle": "other", "driver": None},
+        ],
+        "active": {"car": {"vehicle": "car"}},
+    }
+    asyncio.run(store.async_set_driver_default("car", "person.alice"))
+    assert store.get_driver_defaults() == {"car": "person.alice"}
+    assert [trip.get("driver") for trip in asyncio.run(store.async_get_trips())] == [
+        "person.alice", "person.bob", None, "person.alice",
+    ]
+    asyncio.run(store.async_set_driver_default("car", "person.bob"))
+    assert store._data["trips"][0]["driver"] == "person.alice"
+    assert saved[-1]["driver_defaults"] == {"car": "person.bob"}
+
+
+def test_new_trip_uses_vehicle_default_and_keeps_edited_driver_at_stop() -> None:
+    store, saved, _ = driver_store()
+    store._data = {"trips": [], "active": {}, "driver_defaults": {"car": "person.alice"}}
+
+    async def geocode(trip):
+        pass
+
+    store._async_geocode_trip = geocode
+
+    async def record():
+        await store._async_start_trip("car")
+        trip = store._data["active"]["car"]
+        assert trip["driver"] == "person.alice"
+        trip_id = trip["id"]
+        await store.async_set_trip_driver(trip_id, "person.bob")
+        await store._async_stop_trip("car")
+        assert store._data["trips"][0]["id"] == trip_id
+        assert store._data["trips"][0]["driver"] == "person.bob"
+        await store.async_set_trip_driver(trip_id, "person.alice")
+
+    asyncio.run(record())
+    assert saved[-1]["trips"][0]["driver"] == "person.alice"
+
+
+def test_missing_or_deleted_defaults_record_with_explicit_warning(caplog) -> None:
+    for defaults in ({}, {"car": "person.deleted"}):
+        store, _, _ = driver_store()
+        store._data = {
+            "trips": [], "active": {}, "driver_defaults": defaults,
+            "driver_controls_enabled": True,
+        }
+        asyncio.run(store._async_start_trip("car"))
+        assert store._data["active"]["car"]["driver"] is None
+        assert store._data["active"]["car"]["id"]
+    assert "No valid default driver configured for vehicle car" in caplog.text
+
+
+def test_invalid_driver_or_unknown_target_does_not_change_storage() -> None:
+    import pytest
+
+    store, saved, _ = driver_store()
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_set_driver_default("car", "sensor.alice"))
+    with pytest.raises(KeyError):
+        asyncio.run(store.async_set_driver_default("missing", "person.alice"))
+    with pytest.raises(KeyError):
+        asyncio.run(store.async_set_trip_driver("missing", "person.alice"))
+    assert saved == []
+
+
+def test_added_trips_use_defaults_and_clear_preserves_defaults() -> None:
+    store, saved, people = driver_store()
+    asyncio.run(store.async_set_driver_default("car", "person.alice"))
+    trip = {"vehicle": "car"}
+    asyncio.run(store.async_add_trip(trip))
+    assert trip["driver"] == "person.alice"
+    assert trip["id"]
+    people[0].name = "Alice renamed"
+    assert store.get_drivers()[0]["name"] == "Alice renamed"
+    asyncio.run(store.async_clear())
+    assert asyncio.run(store.async_get_trips()) == []
+    assert saved[-1]["driver_defaults"] == {"car": "person.alice"}
+
+
+def test_driver_visibility_is_opt_in_persistent_and_does_not_stop_assignment() -> None:
+    store, saved, _ = driver_store()
+    assert store.driver_controls_enabled is False
+    asyncio.run(store.async_set_driver_default("car", "person.alice"))
+    asyncio.run(store.async_set_driver_controls_enabled(True))
+    assert store.driver_controls_enabled is True
+    asyncio.run(store.async_set_driver_controls_enabled(False))
+    asyncio.run(store._async_start_trip("car"))
+    assert store._data["active"]["car"]["driver"] == "person.alice"
+    restored, _, _ = driver_store(saved[-1])
+    asyncio.run(restored.async_load())
+    assert restored.driver_controls_enabled is False
+    assert restored._data["active"]["car"]["driver"] == "person.alice"
+    asyncio.run(restored.async_set_driver_controls_enabled(True))
+    asyncio.run(restored.async_clear())
+    assert restored.driver_controls_enabled is True
+    assert restored.get_driver_defaults() == {"car": "person.alice"}

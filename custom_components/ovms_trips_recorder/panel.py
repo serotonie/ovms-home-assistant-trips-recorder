@@ -209,8 +209,73 @@ class VehicleTripsApiView(HomeAssistantView):
         )
 
 
+class DriversApiView(HomeAssistantView):
+    """Expose person choices and per-vehicle defaults to authenticated clients."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/drivers"
+    name = f"api:{DOMAIN}:drivers"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request):
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        return self.json({
+            "enabled": store.driver_controls_enabled,
+            "drivers": store.get_drivers(),
+            "defaults": store.get_driver_defaults(),
+            "vehicles": await store.async_get_vehicle_ids(),
+        })
+
+
+class DriverUpdateApiView(HomeAssistantView):
+    """Update trip drivers or vehicle defaults with validated person IDs."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/drivers/{{kind}}/{{target}}"
+    name = f"api:{DOMAIN}:driver_update"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def put(self, request, kind: str, target: str):
+        if kind not in {"vehicle", "trip"} and (kind, target) != ("settings", "enabled"):
+            return self.json_message("Unknown driver target.", status_code=404)
+        if kind in {"vehicle", "settings"} and not request["hass_user"].is_admin:
+            return self.json_message("Only administrators can change driver settings.", status_code=403)
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        try:
+            data = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return self.json_message("Invalid JSON body.", status_code=400)
+        if kind == "settings":
+            if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+                return self.json_message("'enabled' must be a boolean.", status_code=400)
+            await store.async_set_driver_controls_enabled(data["enabled"])
+            return self.json({"enabled": store.driver_controls_enabled})
+        if not isinstance(data, dict) or not isinstance(data.get("driver"), str):
+            return self.json_message("'driver' must be a person entity ID.", status_code=400)
+        try:
+            if kind == "vehicle":
+                await store.async_set_driver_default(target, data["driver"])
+            else:
+                await store.async_set_trip_driver(target, data["driver"])
+        except ValueError as error:
+            return self.json_message(str(error), status_code=400)
+        except KeyError:
+            return self.json_message("Vehicle or trip not found.", status_code=404)
+        return self.json({"driver": data["driver"]})
+
+
 async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the panel routes consumed by Home Assistant."""
     hass.http.register_view(TripsRecorderApiView(hass))
+    hass.http.register_view(DriversApiView(hass))
+    hass.http.register_view(DriverUpdateApiView(hass))
     hass.http.register_view(TripsRecorderModuleView())
     hass.http.register_view(VehicleTripsApiView(hass))

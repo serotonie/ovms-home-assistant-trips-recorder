@@ -22,6 +22,29 @@ export const TRANSLATIONS = {
     ko: { trips: "주행 기록", trip: "주행", tripsPlural: "주행 기록", from: "시작", to: "종료", vehicle: "차량", allVehicles: "모든 차량", reset: "초기화", noTrips: "조건에 맞는 주행이 없습니다.", loadingTrips: "주행 기록을 불러올 수 없습니다.", ongoing: "진행 중", gpsPosition: "GPS 위치가 기록되었습니다", start: "출발", arrival: "도착" },
 };
 
+Object.assign(TRANSLATIONS.en, {
+    driver: "Driver",
+    enableDriverControls: "Show driver controls (automatic assignment continues when hidden)",
+    driverNotSet: "Driver not set",
+    driverUnavailable: "Person unavailable",
+    defaultDrivers: "Default drivers per vehicle",
+    defaultDriverHelp: "Defaults apply to new trips and backfill trips without a driver. Assigned trips are not changed.",
+    noDrivers: "No people available. Add people in Home Assistant Settings > People.",
+    driverLoadError: "Unable to load drivers. Refresh the panel to retry.",
+    driverSaveError: "Unable to save the driver. Please try again.",
+});
+Object.assign(TRANSLATIONS.fr, {
+    driver: "Conducteur",
+    enableDriverControls: "Afficher les conducteurs (l'attribution automatique continue lorsque masqués)",
+    driverNotSet: "Conducteur non défini",
+    driverUnavailable: "Personne indisponible",
+    defaultDrivers: "Conducteurs par défaut par véhicule",
+    defaultDriverHelp: "Les valeurs par défaut sont appliquées aux nouveaux trajets et aux trajets sans conducteur. Les trajets déjà attribués ne changent pas.",
+    noDrivers: "Aucune personne disponible. Ajoutez des personnes dans Paramètres > Personnes de Home Assistant.",
+    driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
+    driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer.",
+});
+
 const PAGINATION_TRANSLATIONS = {
     en: ["Trips per batch", "Load more", "Loading…", "Retry"],
     fr: ["Trajets par lot", "Charger plus", "Chargement…", "Réessayer"],

@@ -39,6 +39,51 @@ Loading failures keep existing results and offer **Retry** instead of repeatedly
 retrying automatically. Live trip updates refresh the already-loaded window,
 without loading the entire history or recreating unchanged map containers.
 
+## Trip drivers
+
+Drivers are Home Assistant **person entities**, not login accounts. Create them
+under **Settings > People**. Driver controls are **disabled by default**.
+Administrators can enable **Show driver controls** above the trip cards.
+When enabled, each trip card displays its driver and lets any
+authenticated user select a different person; changes are saved immediately,
+including for ongoing trips.
+
+Disabling the switch hides driver selectors, default-driver settings, and
+missing-driver warnings for everyone. It does **not** stop automatic assignment:
+new trips still use configured defaults, and all saved assignments and defaults
+are retained. The switch is persistent across restarts and clearing trips.
+
+Administrators can expand **Default drivers per vehicle** above the trip cards
+to select a default for each configured or previously recorded vehicle. Setting
+a default also assigns it to that vehicle's existing and ongoing trips without a
+driver. Changing a default never overwrites an already assigned driver.
+
+Recording continues if no default has been configured or its person has been
+deleted: affected new trips show **Driver not set** until assigned manually or
+backfilled by configuring a valid default. Deleted people on already assigned
+trips remain identifiable by their entity ID and can be replaced in the selector.
+Person entity IDs and defaults persist across restarts; clearing trips preserves
+defaults. English and French driver labels are provided, with English fallback
+for other panel languages.
+
+Trip JSON now includes a persistent `id` and a `driver` person entity ID
+(`null` when not yet assigned). Older trips receive IDs on load. Existing trip
+read APIs include these fields. Driver choices and writes require authentication:
+
+- `GET /api/ovms_trips_recorder/drivers` returns `drivers` (`id`, `name`),
+  `defaults` (vehicle ID to person entity ID), `vehicles`, and `enabled`
+  (whether the panel shows driver controls).
+- `PUT /api/ovms_trips_recorder/drivers/trip/{trip_id}` changes a trip's driver.
+- `PUT /api/ovms_trips_recorder/drivers/vehicle/{vehicle_id}` changes a default
+  (administrators only).
+
+Both writes accept `{"driver": "person.example"}`. Invalid people or bodies
+return 400, unknown targets return 404, and unavailable storage returns 503.
+Administrators can also
+`PUT /api/ovms_trips_recorder/drivers/settings/enabled` with `{"enabled": true}`
+or `{"enabled": false}` to toggle panel visibility. This is a UI preference;
+authenticated driver API reads/writes remain available while controls are hidden.
+
 ## Structure
 
 ```text

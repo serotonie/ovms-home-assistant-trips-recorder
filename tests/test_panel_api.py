@@ -326,3 +326,112 @@ def test_vehicle_trips_route_is_registered_and_requires_authentication() -> None
     view = next(view for view in views if isinstance(view, panel.VehicleTripsApiView))
     assert view.url == "/api/ovms_trips_recorder/vehicles/{vehicle_id}/trips"
     assert view.requires_auth is True
+
+
+class DriverStore(FakeStore):
+    def __init__(self):
+        super().__init__()
+        self.changes = []
+        self.driver_controls_enabled = False
+
+    async def async_set_driver_controls_enabled(self, enabled):
+        self.driver_controls_enabled = enabled
+
+    def get_drivers(self):
+        return [{"id": "person.alice", "name": "Alice"}]
+
+    def get_driver_defaults(self):
+        return {"car": "person.alice"}
+
+    async def async_set_driver_default(self, target, driver):
+        await self.async_set_trip_driver(target, driver)
+
+    async def async_set_trip_driver(self, target, driver):
+        if driver != "person.alice":
+            raise ValueError("Choose an existing Home Assistant person.")
+        if target == "missing":
+            raise KeyError(target)
+        self.changes.append((target, driver))
+
+
+class DriverRequest(dict):
+    def __init__(self, body=None, admin=False, invalid_json=False):
+        super().__init__(hass_user=types.SimpleNamespace(is_admin=admin))
+        self.body = body
+        self.invalid_json = invalid_json
+
+    async def json(self):
+        if self.invalid_json:
+            raise ValueError("Invalid JSON")
+        return self.body
+
+
+def test_driver_routes_are_registered_and_authenticated() -> None:
+    hass = FakeHass(DriverStore())
+    views = []
+    hass.http = types.SimpleNamespace(register_view=views.append)
+    asyncio.run(panel.async_setup_panel(hass))
+    for cls in (panel.DriversApiView, panel.DriverUpdateApiView):
+        view = next(view for view in views if isinstance(view, cls))
+        assert view.requires_auth is True
+    data = asyncio.run(panel.DriversApiView(hass).get(None))
+    assert data == {
+        "enabled": False,
+        "drivers": [{"id": "person.alice", "name": "Alice"}],
+        "defaults": {"car": "person.alice"}, "vehicles": ["car"],
+    }
+
+
+@pytest.mark.parametrize("kind,admin,status", [
+    ("trip", False, 200), ("vehicle", True, 200),
+    ("vehicle", False, 403), ("unknown", True, 404),
+])
+def test_driver_writes_enforce_default_admin_permission(kind, admin, status) -> None:
+    store = DriverStore()
+    view = panel.DriverUpdateApiView(FakeHass(store))
+    result = asyncio.run(view.put(
+        DriverRequest({"driver": "person.alice"}, admin=admin), kind, "car",
+    ))
+    assert result.get("status_code", 200) == status
+    assert store.changes == ([("car", "person.alice")] if status == 200 else [])
+
+
+@pytest.mark.parametrize("body", [None, [], {}, {"driver": None}, {"driver": 5}, {"driver": "sensor.alice"}])
+def test_driver_writes_reject_invalid_bodies_and_people(body) -> None:
+    store = DriverStore()
+    result = asyncio.run(panel.DriverUpdateApiView(FakeHass(store)).put(
+        DriverRequest(body), "trip", "car",
+    ))
+    assert result["status_code"] == 400
+    assert store.changes == []
+
+
+def test_driver_writes_report_bad_json_unknown_target_and_unavailable_store() -> None:
+    view = panel.DriverUpdateApiView(FakeHass(DriverStore()))
+    assert asyncio.run(view.put(DriverRequest(invalid_json=True), "trip", "car"))["status_code"] == 400
+    assert asyncio.run(view.put(DriverRequest({"driver": "person.alice"}), "trip", "missing"))["status_code"] == 404
+    assert asyncio.run(panel.DriverUpdateApiView(FakeHass(None)).put(
+        DriverRequest({"driver": "person.alice"}), "trip", "car",
+    ))["status_code"] == 503
+    assert asyncio.run(panel.DriversApiView(FakeHass(None)).get(None))["status_code"] == 503
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_driver_visibility_switch_is_admin_only(enabled) -> None:
+    store = DriverStore()
+    view = panel.DriverUpdateApiView(FakeHass(store))
+    result = asyncio.run(view.put(DriverRequest({"enabled": enabled}), "settings", "enabled"))
+    assert result["status_code"] == 403
+    result = asyncio.run(view.put(
+        DriverRequest({"enabled": enabled}, admin=True), "settings", "enabled",
+    ))
+    assert result == {"enabled": enabled}
+    assert store.driver_controls_enabled is enabled
+
+
+@pytest.mark.parametrize("body", [None, {}, {"enabled": "false"}, {"enabled": 1}])
+def test_driver_visibility_rejects_non_boolean_values(body) -> None:
+    view = panel.DriverUpdateApiView(FakeHass(DriverStore()))
+    assert asyncio.run(view.put(
+        DriverRequest(body, admin=True), "settings", "enabled",
+    ))["status_code"] == 400

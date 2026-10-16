@@ -90,6 +90,12 @@
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
         .pagination-error { color: var(--error-color); }
+        .driver-settings { margin-bottom: 24px; }
+        .driver-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-block: 12px; }
+        .trip-driver { margin-block: 12px; }
+        .driver-toggle { display: flex; align-items: center; gap: 8px; }
+        .driver-toggle input { width: auto; min-height: auto; }
+        .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
       </style>
@@ -103,6 +109,7 @@
                     <label>${panel.t("pageSize")} <input id="page-size" type="number" min="1" max="100" step="1" value="${panel.pageSize}"></label>
                     <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
         </form>
+                <section id="driver-settings" class="driver-settings" aria-live="polite">${renderDriverSettings(panel)}</section>
                 <div class="trips-grid">${panel.renderTrips()}</div>
                 <div id="pagination" class="pagination" aria-live="polite" aria-busy="${panel.loading}">${panel.renderPagination()}</div>
       </main>`);
@@ -126,6 +133,10 @@
 	function renderTripDetails(panel, trip) {
 		return `
             <div class="trip-head"><span class="vehicle">${panel.escape(trip.vehicle || panel.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${panel.escape(panel.t("trip"))} &middot; ${panel.escape(panel.t("ongoing"))}</span>` : ""}</div>
+            ${panel.driverControlsEnabled ? `<label class="trip-driver">${panel.escape(panel.t("driver"))}
+                <select data-driver-kind="trip" data-driver-target="${panel.escape(trip.id || "")}" ${!trip.id || !panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(trip.driver)}</select>
+            </label>
+            ${!trip.driver ? `<span class="driver-warning">${panel.escape(panel.t("driverNotSet"))}</span>` : ""}` : ""}
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
@@ -133,6 +144,17 @@
             </div>
             <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
                 `;
+	}
+	function renderDriverSettings(panel) {
+		return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
+        ${panel._hass?.user?.is_admin ? `<label class="driver-toggle"><input type="checkbox" data-driver-kind="settings" data-driver-target="enabled" ${panel.driverControlsEnabled ? "checked" : ""} ${panel.savingDriver ? "disabled" : ""}>${panel.escape(panel.t("enableDriverControls"))}</label>` : ""}
+        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}
+        ${panel.driverControlsEnabled && panel._hass?.user?.is_admin ? `<details><summary>${panel.escape(panel.t("defaultDrivers"))}</summary>
+            <p>${panel.escape(panel.t("defaultDriverHelp"))}</p>
+            <div class="driver-defaults">${panel.driverVehicles.map((vehicle) => `<label>${panel.escape(vehicle)}
+                <select data-driver-kind="vehicle" data-driver-target="${panel.escape(vehicle)}" ${!panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(panel.driverDefaults[vehicle])}</select>
+            </label>`).join("")}</div>
+        </details>` : ""}`;
 	}
 	function renderMap(index) {
 		return `<div class="trip-map-canvas" data-index="${index}"></div>`;
@@ -505,6 +527,28 @@
 			arrival: "도착"
 		}
 	};
+	Object.assign(TRANSLATIONS.en, {
+		driver: "Driver",
+		enableDriverControls: "Show driver controls (automatic assignment continues when hidden)",
+		driverNotSet: "Driver not set",
+		driverUnavailable: "Person unavailable",
+		defaultDrivers: "Default drivers per vehicle",
+		defaultDriverHelp: "Defaults apply to new trips and backfill trips without a driver. Assigned trips are not changed.",
+		noDrivers: "No people available. Add people in Home Assistant Settings > People.",
+		driverLoadError: "Unable to load drivers. Refresh the panel to retry.",
+		driverSaveError: "Unable to save the driver. Please try again."
+	});
+	Object.assign(TRANSLATIONS.fr, {
+		driver: "Conducteur",
+		enableDriverControls: "Afficher les conducteurs (l'attribution automatique continue lorsque masqués)",
+		driverNotSet: "Conducteur non défini",
+		driverUnavailable: "Personne indisponible",
+		defaultDrivers: "Conducteurs par défaut par véhicule",
+		defaultDriverHelp: "Les valeurs par défaut sont appliquées aux nouveaux trajets et aux trajets sans conducteur. Les trajets déjà attribués ne changent pas.",
+		noDrivers: "Aucune personne disponible. Ajoutez des personnes dans Paramètres > Personnes de Home Assistant.",
+		driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
+		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer."
+	});
 	for (const [language, [pageSize, loadMore, loading, retry]] of Object.entries({
 		en: [
 			"Trips per batch",
@@ -7402,7 +7446,17 @@
 		constructor() {
 			super();
 			this.attachShadow({ mode: "open" });
+			this.shadowRoot.addEventListener?.("change", (event) => {
+				const field = event.target;
+				if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
+			});
 			this.trips = [];
+			this.drivers = [];
+			this.driverControlsEnabled = false;
+			this.driverDefaults = {};
+			this.driverVehicles = [];
+			this.driverError = "";
+			this.savingDriver = false;
 			this.vehicles = [];
 			this.filteredTrips = [];
 			this.filters = {
@@ -7540,6 +7594,8 @@
 				this.hasMore = data.has_more;
 				this.nextOffset = data.next_offset;
 				this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+				await this.loadDriverSettings();
+				if (generation !== this.requestGeneration) return;
 				this.updateTrips(trips, { prefiltered: true });
 			} catch (error) {
 				if (generation !== this.requestGeneration) return;
@@ -7557,6 +7613,58 @@
 					this.pendingRefresh = false;
 					if (refreshPending && !this.loadError) this.loadTrips({ refresh: true });
 				}
+			}
+		}
+		async loadDriverSettings() {
+			if (!this._hass?.callApi) return;
+			try {
+				const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
+				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean") throw new Error("Invalid driver settings response");
+				this.drivers = data.drivers;
+				this.driverDefaults = data.defaults;
+				this.driverVehicles = data.vehicles;
+				this.driverControlsEnabled = data.enabled;
+				this.driverError = "";
+			} catch (error) {
+				console.error("Failed to load drivers", error);
+				this.driverError = this.t("driverLoadError");
+			}
+			this.updateDriverSettings();
+		}
+		updateDriverSettings() {
+			const settings = this.shadowRoot.querySelector("#driver-settings");
+			if (settings) {
+				const open = settings.querySelector("details")?.open;
+				settings.innerHTML = renderDriverSettings(this);
+				const details = settings.querySelector("details");
+				if (details && open) details.open = true;
+			}
+		}
+		driverOptions(selected) {
+			const missing = selected && !this.drivers.some((driver) => driver.id === selected);
+			return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` + (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") + this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
+		}
+		async saveDriver(field) {
+			if (this.savingDriver) return;
+			const kind = field.dataset.driverKind;
+			const target = field.dataset.driverTarget;
+			const driver = field.value;
+			this.savingDriver = true;
+			field.disabled = true;
+			this.shadowRoot.querySelectorAll("[data-driver-kind]").forEach((select) => {
+				select.disabled = true;
+			});
+			try {
+				await this._hass.callApi("PUT", `ovms_trips_recorder/drivers/${kind}/${encodeURIComponent(target)}`, kind === "settings" ? { enabled: field.checked } : { driver });
+				this.driverError = "";
+				await this.loadTrips({ refresh: true });
+			} catch (error) {
+				console.error("Failed to save driver", error);
+				this.driverError = this.t("driverSaveError");
+			} finally {
+				this.savingDriver = false;
+				this.updateTripDetails();
+				this.updateDriverSettings();
 			}
 		}
 		updateTrips(trips, { prefiltered = false } = {}) {
