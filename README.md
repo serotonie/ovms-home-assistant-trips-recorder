@@ -28,14 +28,27 @@ fully opaque without recreating the map.
 ## Structure
 
 ```text
+src/
+  frontend-version.js
+  panel-view.js
+  panel.js
+  translations.js
 custom_components/
   ovms_trips_recorder/
     __init__.py
     const.py
     manifest.json
     panel.py
+    panel.js
     trip_store.py
 ```
+
+The frontend source is split by responsibility: `panel.js` manages the
+Home Assistant component and trip state, `panel-view.js` renders the panel,
+`translations.js` contains localized labels, and `frontend-version.js` handles
+cache invalidation when the frontend version changes. Vite bundles these
+modules and Leaflet into the single `custom_components/ovms_trips_recorder/panel.js`
+file served by Home Assistant.
 
 ## HACS Installation
 
