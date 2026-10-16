@@ -10,6 +10,7 @@ __pycache__/
 node_modules/
 
 # Home Assistant development instance
+.env
 dev/ha-config/.storage/
 dev/ha-config/.cache/
 dev/ha-config/.cloud/

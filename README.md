@@ -95,8 +95,39 @@ This step is performed automatically when the repository is opened in the VS
 Code Dev Container.
 
 The Home Assistant instance is then available at <http://localhost:8123>. Create
-the administrator user, then add the **OVMS** integration with the following
-settings:
+the administrator user using the credentials in the local `.env` file (see
+below), then add the **OVMS** integration with the following settings:
+
+#### Home Assistant dev login
+
+The Home Assistant container does not support configuring its administrator
+account in `configuration.yaml`. Keep the dev login in a local, Git-ignored
+`.env` file so you can look it up later:
+
+```sh
+cp .env.example .env
+```
+
+Set `HA_DEV_USERNAME` and `HA_DEV_PASSWORD` in `.env`, then use those values
+when creating the administrator during Home Assistant's first-run onboarding.
+For an existing instance, the password can be reset to the value in `.env` by
+running:
+
+```sh
+./dev/reset_ha_dev_password.sh
+```
+
+The script changes the password for `HA_DEV_USERNAME` and restarts the
+Home Assistant container. If you do not remember the username, list configured
+users first:
+
+```sh
+docker compose -f docker-compose.dev.yml exec homeassistant \
+  hass --script auth --config /config list
+```
+
+Copy the matching username into `.env` before running the reset script. This
+is a development-only convenience; do not reuse these credentials elsewhere.
 
 > **Note**: in the dev environment, add the **OVMS Trips Recorder**
 > integration from the UI after startup.
