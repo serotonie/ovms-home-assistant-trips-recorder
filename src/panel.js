@@ -294,8 +294,10 @@ class TripsRecorderPanel extends HTMLElement {
         .trip-map-canvas { display: block; width: 100%; height: 100%; }
         .trip-details { display: flex; flex-direction: column; padding: 16px; }
         .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .trip-head { align-items: flex-start; }
+        .trip-head { align-items: flex-start; flex-wrap: wrap; }
         .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
+        .trip-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--primary-color); border-radius: 999px; color: var(--primary-text-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
+        .trip-status::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--primary-color); }
         .route { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-rows: auto minmax(14px, auto) auto; column-gap: 9px; margin-top: 14px; }
         .route > .dot { grid-column: 1; justify-self: center; align-self: center; z-index: 1; }
         .route > .address { grid-column: 2; }
@@ -348,7 +350,7 @@ class TripsRecorderPanel extends HTMLElement {
 
     renderTripDetails(trip) {
         return `
-            <div class="trip-head"><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span></div>
+            <div class="trip-head"><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${this.escape(this.t("trip"))} &middot; ${this.escape(this.t("ongoing"))}</span>` : ""}</div>
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${this.escape(this.formatDate(trip.start_time))}</strong><span>${this.escape(this.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
@@ -403,6 +405,11 @@ class TripsRecorderPanel extends HTMLElement {
             const points = (trip.waypoints || [])
                 .map((point) => [Number(point.position_lat), Number(point.position_long)])
                 .filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
+            const pathStyle = {
+                color: "#03a9f4",
+                weight: 4,
+                opacity: trip.stop_time ? 1 : 0.45,
+            };
             let entry = this.maps.get(container);
             if (!entry) {
                 const map = Leaflet.map(container, { attributionControl: true, zoomControl: true, scrollWheelZoom: false });
@@ -410,12 +417,13 @@ class TripsRecorderPanel extends HTMLElement {
                     attribution: this.getTileAttribution(),
                     maxZoom: 19,
                 }).addTo(map);
-                const path = Leaflet.polyline(points, { color: "#03a9f4", weight: 4 }).addTo(map);
+                const path = Leaflet.polyline(points, pathStyle).addTo(map);
                 entry = { map, path, startMarker: null, endMarker: null, points };
                 this.maps.set(container, entry);
                 this.observeMapResize(container, entry);
             } else {
                 entry.path.setLatLngs(points);
+                entry.path.setStyle(pathStyle);
                 entry.points = points;
             }
             if (points.length) {

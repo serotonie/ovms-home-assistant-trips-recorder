@@ -18,6 +18,13 @@ https://github.com/serotonie/ovms-home-assistant-trips-recorder
 - provide a sidebar panel for viewing a vehicle's trips
 - remain compatible with a HACS installation
 
+## Trip status
+
+While a trip is in progress, its card displays a localized status badge next to
+the vehicle name and its map route is semi-transparent. Both update live as new
+trip data arrives. When the trip ends, the badge disappears and the route becomes
+fully opaque without recreating the map.
+
 ## Structure
 
 ```text
