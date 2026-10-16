@@ -215,6 +215,34 @@ rm -rf dev/ha-config/.storage
 Trips and waypoints remain stored even if geocoding fails. In that case, the
 addresses are missing, but the GPS coordinates are preserved.
 
+## REST API
+
+Retrieve trips for one vehicle overlapping a date/time range:
+
+```sh
+curl --get \
+  'http://localhost:8123/api/ovms_trips_recorder/vehicles/car-1/trips' \
+  --header "Authorization: Bearer $HA_TOKEN" \
+  --data-urlencode 'from=2026-10-01T00:00:00+02:00' \
+  --data-urlencode 'to=2026-10-16T23:59:59+02:00'
+```
+
+Use a Home Assistant long-lived access token for `HA_TOKEN`. URL-encode the
+vehicle ID when necessary. Both `from` and `to` are required ISO 8601 datetimes
+with a timezone (`Z` or an explicit UTC offset). The interval is inclusive:
+a trip matches when it starts at or before `to` and ends at or after `from`.
+Trips in progress have an open-ended interval; trips without a known start time
+are excluded. Legacy stored timestamps without a timezone are interpreted as UTC.
+
+The JSON response contains `vehicle`, `from`, `to`, `trips`, and `count`.
+`trips` contains the complete stored trip objects, including their waypoints,
+in storage order. Unknown vehicles or ranges without matches return an empty
+list with `count: 0`. Invalid or missing bounds, or `from` later than `to`,
+return HTTP 400; unavailable trip storage returns HTTP 503. Malformed stored
+timestamps are logged and the affected trips are skipped.
+
+The existing endpoint used by the sidebar panel remains unchanged.
+
 ## Tests
 
 Regression tests cover the sidebar panel and trip recording from OVMS entities.
@@ -223,7 +251,7 @@ From the repository root, run:
 
 ```sh
 python3 -m pip install -r requirements.txt pytest
-pytest -q tests/test_trip_store.py
+pytest -q tests/test_trip_store.py tests/test_panel_api.py
 npm test
 ```
 
