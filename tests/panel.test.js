@@ -185,6 +185,32 @@ test("renderTrips() affiche un conteneur de carte au-dessus des détails de chaq
     assert.ok(markup.indexOf('data-index="0"') < markup.indexOf('class="trip-details"'));
 });
 
+test("renderTripDetails() affiche l'heure de chaque étape à la place de son libellé", () => {
+    const customElements = createCustomElementRegistry();
+    const TripsRecorderPanel = loadPanelModule({
+        customElements,
+        document: { createElement: () => ({}) },
+        window: {},
+    });
+    const panel = new TripsRecorderPanel();
+    panel.formatDate = (value) => `timestamp ${value}`;
+    const markup = panel.renderTripDetails({
+        start_time: "start",
+        stop_time: "stop",
+        start_road: "Start street",
+        stop_road: "Arrival street",
+        vehicle: "OVMS",
+        distance: 12.3,
+    });
+
+    assert.ok(markup.indexOf("timestamp start") < markup.indexOf("Start street"));
+    assert.ok(markup.indexOf("timestamp stop") < markup.indexOf("Arrival street"));
+    assert.match(markup, /<i class="dot"><\/i>/);
+    assert.match(markup, /<i class="connector"><\/i>/);
+    assert.match(markup, /<i class="dot stop"><\/i>/);
+    assert.doesNotMatch(markup, /<strong>(?:Departure|Arrival|Départ|Arrivée)<\/strong>/);
+});
+
 test("render() uses the Home Assistant shell and theme-aligned filters", () => {
     const customElements = createCustomElementRegistry();
     const TripsRecorderPanel = loadPanelModule({
@@ -204,6 +230,7 @@ test("render() uses the Home Assistant shell and theme-aligned filters", () => {
     assert.match(panel.shadowRoot.innerHTML, /background: var\(--card-background-color\)/);
     assert.match(panel.shadowRoot.innerHTML, /var\(--ha-card-border-radius, 12px\)/);
     assert.match(panel.shadowRoot.innerHTML, /@media \(max-width: 520px\)/);
+    assert.match(panel.shadowRoot.innerHTML, /\.route > \.dot \{ grid-column: 1; justify-self: center; align-self: center;/);
     assert.doesNotMatch(panel.shadowRoot.innerHTML, /OVMS \/ Home Assistant/);
 });
 
