@@ -142,7 +142,7 @@ function createFakeLeaflet() {
     };
 }
 
-function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver }) {
+function loadPanelModule({ customElements, document, window, fetchImpl, ResizeObserver, IntersectionObserver }) {
     const sandbox = {
         HTMLElement: FakeHTMLElement,
         customElements,
@@ -153,6 +153,8 @@ function loadPanelModule({ customElements, document, window, fetchImpl, ResizeOb
         clearTimeout,
         console,
         ResizeObserver,
+        IntersectionObserver,
+        URLSearchParams,
     };
     vm.createContext(sandbox);
     new vm.Script(PANEL_SOURCE, { filename: "panel.js" }).runInContext(sandbox);
@@ -172,6 +174,302 @@ function createPanelWithFakeLeaflet(options = {}) {
     panel.loadLeaflet = () => fakeLeaflet;
     return { panel, fakeLeaflet };
 }
+
+function createPaginationPanel(fetchImpl, IntersectionObserver) {
+    const customElements = createCustomElementRegistry();
+    const Panel = loadPanelModule({
+        customElements, document: {}, window: {}, fetchImpl, IntersectionObserver,
+    });
+    const panel = new Panel();
+    const nodes = new Map();
+    for (const selector of ["#from", "#to", "#vehicle", "#page-size", ".filters",
+        "#reset", "#pagination", "#load-more", "#retry", ".trip-count", ".trips-grid"]) {
+        nodes.set(selector, {
+            value: selector === "#page-size" ? "10" : "",
+            listeners: {},
+            addEventListener(name, callback) { this.listeners[name] = callback; },
+            setAttribute() {},
+            checkValidity() { return Number(this.value) >= 1 && Number(this.value) <= 100; },
+            reportValidity() { this.validityReported = true; },
+            insertAdjacentHTML(position, html) { this.appended = (this.appended || "") + html; },
+            reset() {
+                for (const field of ["#from", "#to", "#vehicle"]) nodes.get(field).value = "";
+            },
+        });
+    }
+    panel.shadowRoot.querySelector = (selector) => nodes.get(selector) || null;
+    panel._hass = { config: { time_zone: "America/New_York" } };
+    return { panel, nodes };
+}
+
+function paginatedResponse(trips, count, nextOffset = null) {
+    return {
+        ok: true,
+        json: async () => ({
+            trips, count, vehicles: ["car", "other"],
+            has_more: nextOffset !== null, next_offset: nextOffset,
+        }),
+    };
+}
+
+const paginationTrips = Array.from({ length: 23 }, (_, index) => ({
+    vehicle: "car", start_time: `2026-10-${String(31 - index).padStart(2, "0")}T12:00:00Z`,
+    stop_time: "2026-11-01T12:00:00Z", waypoints: [],
+}));
+
+test("pagination defaults to 10, appends without rebuilding existing cards, and stops at the end", async () => {
+    const requests = [];
+    const { panel, nodes } = createPaginationPanel(async (url) => {
+        const query = new URL(url, "http://localhost").searchParams;
+        requests.push(query);
+        const offset = Number(query.get("offset"));
+        const end = Math.min(offset + Number(query.get("limit")), paginationTrips.length);
+        return paginatedResponse(paginationTrips.slice(offset, end), 23, end < 23 ? end : null);
+    });
+    let renders = 0;
+    const render = panel.render.bind(panel);
+    panel.render = () => { renders++; render(); };
+
+    await panel.loadTrips();
+    assert.equal(requests[0].get("limit"), "10");
+    assert.equal(requests[0].get("timezone"), "America/New_York");
+    assert.equal(panel.filteredTrips.length, 10);
+    assert.equal(nodes.get(".trip-count").textContent, "10 / 23 Trips");
+    assert.match(nodes.get("#pagination").innerHTML, /Load more/);
+    const initialRenders = renders;
+    await panel.loadTrips({ append: true });
+    assert.equal(renders, initialRenders);
+    assert.match(nodes.get(".trips-grid").appended, /data-index="10"/);
+    await panel.loadTrips({ append: true });
+    assert.deepEqual(Array.from(panel.trips), paginationTrips);
+    assert.equal(nodes.get(".trip-count").textContent, "23 Trips");
+    assert.equal(nodes.get("#pagination").innerHTML, "");
+    await panel.loadTrips({ append: true });
+    assert.equal(requests.length, 3);
+});
+
+test("filter and batch changes restart pagination, validate size, and reset to 10", async () => {
+    const requests = [];
+    const { panel, nodes } = createPaginationPanel(async (url) => {
+        requests.push(new URL(url, "http://localhost").searchParams);
+        return paginatedResponse([], 0);
+    });
+    panel.render();
+    nodes.get("#page-size").value = "25";
+    nodes.get("#from").value = "2026-10-01";
+    nodes.get("#to").value = "2026-10-31";
+    nodes.get("#vehicle").value = "other";
+    nodes.get(".filters").listeners.change();
+    await new Promise(setImmediate);
+    assert.equal(requests[0].get("limit"), "25");
+    assert.equal(requests[0].get("offset"), "0");
+    assert.equal(requests[0].get("vehicle"), "other");
+    assert.equal(requests[0].get("from"), "2026-10-01");
+    assert.equal(requests[0].get("to"), "2026-10-31");
+    nodes.get("#page-size").value = "0";
+    nodes.get(".filters").listeners.change();
+    assert.equal(requests.length, 1);
+    assert.equal(nodes.get("#page-size").validityReported, true);
+    nodes.get("#reset").listeners.click();
+    await new Promise(setImmediate);
+    assert.equal(panel.pageSize, 10);
+    assert.equal(requests[1].get("limit"), "10");
+    assert.equal(requests[1].has("vehicle"), false);
+    assert.match(nodes.get(".trips-grid").innerHTML, /No trips match/);
+});
+
+test("stale responses cannot overwrite new filter results", async () => {
+    let resolveOld;
+    let calls = 0;
+    const { panel, nodes } = createPaginationPanel(() => {
+        if (++calls === 1) return new Promise((resolve) => { resolveOld = resolve; });
+        return Promise.resolve(paginatedResponse([], 0));
+    });
+    const old = panel.loadTrips();
+    nodes.get("#vehicle").value = "other";
+    panel.applyFilters();
+    await new Promise(setImmediate);
+    resolveOld(paginatedResponse(paginationTrips.slice(0, 10), 23, 10));
+    await old;
+    assert.equal(panel.trips.length, 0);
+    assert.equal(panel.filters.vehicle, "other");
+    assert.equal(panel.loading, false);
+});
+
+test("API-filtered dates and ordering are not reinterpreted by the browser", async () => {
+    const trip = { vehicle: "car", start_time: "2026-01-01T02:00:00" };
+    const { panel, nodes } = createPaginationPanel(async () => paginatedResponse([trip], 1));
+    panel.filters = { from: "2025-12-31", to: "2025-12-31", vehicle: "" };
+    nodes.get("#from").value = "2025-12-31";
+    nodes.get("#to").value = "2025-12-31";
+    panel.applyFilters = () => assert.fail("API results must not be filtered again");
+    await panel.loadTrips();
+    assert.deepEqual(Array.from(panel.filteredTrips), [trip]);
+});
+
+test("infinite scroll guards concurrent loads, stops on errors, retries, and disconnects", async () => {
+    const observers = [];
+    class Observer {
+        constructor(callback, options) {
+            this.callback = callback;
+            this.options = options;
+            observers.push(this);
+        }
+        observe(node) { this.node = node; }
+        disconnect() { this.disconnected = true; }
+    }
+    let calls = 0;
+    let resolvePage;
+    const { panel, nodes } = createPaginationPanel(async () => {
+        calls++;
+        if (calls === 1) return paginatedResponse(paginationTrips.slice(0, 10), 23, 10);
+        if (calls === 2) return new Promise((resolve) => { resolvePage = resolve; });
+        return paginatedResponse(paginationTrips.slice(10, 20), 23, 20);
+    }, Observer);
+    await panel.loadTrips();
+    const observer = observers.at(-1);
+    assert.equal(observer.options.rootMargin, "300px");
+    assert.equal(observer.node, nodes.get("#pagination"));
+    observer.callback([{ isIntersecting: true }]);
+    observer.callback([{ isIntersecting: true }]);
+    assert.equal(calls, 2);
+    resolvePage({ ok: false, status: 503 });
+    await new Promise(setImmediate);
+    assert.equal(panel.trips.length, 10);
+    assert.match(nodes.get("#pagination").innerHTML, /role="alert"/);
+    observer.callback([{ isIntersecting: true }]);
+    assert.equal(calls, 2);
+    await nodes.get("#retry").listeners.click();
+    assert.equal(panel.trips.length, 20);
+    const lastObserver = observers.at(-1);
+    panel.disconnectedCallback();
+    assert.equal(lastObserver.disconnected, true);
+    lastObserver.callback([{ isIntersecting: true }]);
+    assert.equal(calls, 3);
+});
+
+test("failed initial requests and malformed pages show retry without an empty-results message", async () => {
+    for (const response of [
+        { ok: false, status: 500 },
+        paginatedResponse([], 23, 10),
+    ]) {
+        let calls = 0;
+        const { panel, nodes } = createPaginationPanel(async () => {
+            if (++calls === 1) return response;
+            return paginatedResponse([], 0);
+        });
+        await panel.loadTrips();
+        assert.match(nodes.get("#pagination").innerHTML, /Retry/);
+        assert.equal(nodes.get(".trips-grid").innerHTML, "");
+        await nodes.get("#retry").listeners.click();
+        assert.equal(panel.loadError, false);
+        assert.match(nodes.get(".trips-grid").innerHTML, /No trips match/);
+    }
+});
+
+test("disconnect discards in-flight results and late event subscriptions", async () => {
+    let resolveFetch, resolveSubscription;
+    let unsubscribed = false;
+    const { panel } = createPaginationPanel(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    panel._hass.connection = {
+        subscribeEvents: () => new Promise((resolve) => { resolveSubscription = resolve; }),
+    };
+    const subscription = panel.subscribeToUpdates();
+    const load = panel.loadTrips();
+    panel.disconnectedCallback();
+    resolveFetch(paginatedResponse(paginationTrips.slice(0, 10), 23, 10));
+    resolveSubscription(() => { unsubscribed = true; });
+    await Promise.all([subscription, load]);
+    assert.equal(panel.trips.length, 0);
+    assert.equal(panel.loading, false);
+    assert.equal(panel.unsubscribeUpdates, null);
+    assert.equal(unsubscribed, true);
+});
+
+test("appending a page keeps the existing Leaflet map instance", async () => {
+    let calls = 0;
+    const { panel, nodes } = createPaginationPanel(async () => {
+        const index = calls++;
+        return paginatedResponse([paginationTrips[index]], 2, index ? null : 1);
+    });
+    panel.pageSize = 1;
+    const fakeLeaflet = createFakeLeaflet();
+    panel.loadLeaflet = () => fakeLeaflet;
+    const containers = [];
+    panel.shadowRoot.querySelectorAll = (selector) => selector === ".trip-map-canvas" ? containers : [];
+    const render = panel.render.bind(panel);
+    panel.render = () => {
+        render();
+        containers.splice(0, containers.length, ...Array.from(
+            panel.shadowRoot.innerHTML.matchAll(/data-index="(\d+)"/g),
+            (match) => ({ dataset: { index: match[1] } })
+        ));
+    };
+    nodes.get(".trips-grid").insertAdjacentHTML = (position, html) => {
+        for (const match of html.matchAll(/data-index="(\d+)"/g)) {
+            containers.push({ dataset: { index: match[1] } });
+        }
+    };
+    await panel.loadTrips();
+    await panel._mapRenderQueue;
+    const firstContainer = containers[0];
+    const firstMap = panel.maps.get(firstContainer).map;
+    await panel.loadTrips({ append: true });
+    await panel._mapRenderQueue;
+    assert.equal(panel.maps.get(firstContainer).map, firstMap);
+    assert.equal(firstMap.removed, undefined);
+    assert.equal(fakeLeaflet.maps.length, 2);
+});
+
+test("live notifications refresh only the loaded window and retain stable map containers", async () => {
+    let callback;
+    const offsets = [];
+    let dataset = paginationTrips;
+    const { panel } = createPaginationPanel(async (url) => {
+        const query = new URL(url, "http://localhost").searchParams;
+        const offset = Number(query.get("offset"));
+        offsets.push(offset);
+        const end = Math.min(offset + Number(query.get("limit")), dataset.length);
+        return paginatedResponse(dataset.slice(offset, end), dataset.length, end < dataset.length ? end : null);
+    });
+    panel._hass.connection = {
+        subscribeEvents: async (listener) => { callback = listener; return () => {}; },
+    };
+    await panel.subscribeToUpdates();
+    await panel.loadTrips();
+    await panel.loadTrips({ append: true });
+    let renders = 0;
+    const render = panel.render.bind(panel);
+    panel.render = () => { renders++; render(); };
+    dataset = dataset.map((trip) => ({ ...trip, distance: 42 }));
+    callback({ data: { trips: paginationTrips } });
+    await new Promise(setImmediate);
+    assert.equal(panel.trips.length, 20);
+    assert.equal(panel.trips[0].distance, 42);
+    assert.deepEqual(offsets, [0, 10, 0, 10]);
+    assert.equal(renders, 0);
+});
+
+test("live notifications received during loading are coalesced into a refresh", async () => {
+    let callback, resolveInitial;
+    let calls = 0;
+    const { panel } = createPaginationPanel(async () => {
+        if (++calls === 1) return new Promise((resolve) => { resolveInitial = resolve; });
+        return paginatedResponse(paginationTrips.slice(0, 10), 23, 10);
+    });
+    panel._hass.connection = {
+        subscribeEvents: async (listener) => { callback = listener; return () => {}; },
+    };
+    await panel.subscribeToUpdates();
+    const initial = panel.loadTrips();
+    callback({});
+    callback({});
+    resolveInitial(paginatedResponse([], 0));
+    await initial;
+    await new Promise(setImmediate);
+    assert.equal(calls, 2);
+    assert.equal(panel.trips.length, 10);
+});
 
 test("renderTrips() affiche un conteneur de carte au-dessus des détails de chaque trajet", () => {
     const customElements = createCustomElementRegistry();
@@ -535,7 +833,10 @@ function createVersionPanel({ stored, version }) {
         customElements,
         document: { createElement: () => ({}) },
         window: win,
-        fetchImpl: async () => ({ ok: true, json: async () => ({ trips: [], version }) }),
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => ({ trips: [], version, count: 0, has_more: false, next_offset: null }),
+        }),
     });
     const panel = new TripsRecorderPanel();
     panel.updateTrips = () => { panel.updated = true; };

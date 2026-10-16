@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -34,16 +35,93 @@ class TripsRecorderApiView(HomeAssistantView):
 
     async def get(self, request):
         """Return the current list of trips."""
+        query = request.query if request is not None else {}
+        paginated = "limit" in query or "offset" in query
+        if paginated:
+            try:
+                limit = int(query.get("limit", "10"))
+                offset = int(query.get("offset", "0"))
+                if not 1 <= limit <= 100 or offset < 0:
+                    raise ValueError
+            except ValueError:
+                return self.json_message(
+                    "'limit' must be between 1 and 100; 'offset' must be non-negative.",
+                    status_code=400,
+                )
+        bounds = {}
+        for parameter in ("from", "to"):
+            value = query.get(parameter)
+            if value:
+                try:
+                    bounds[parameter] = date.fromisoformat(value)
+                except ValueError:
+                    return self.json_message(
+                        f"'{parameter}' must be an ISO 8601 date.", status_code=400
+                    )
+        if bounds.get("from", date.min) > bounds.get("to", date.max):
+            return self.json_message(
+                "'from' must be earlier than or equal to 'to'.", status_code=400
+            )
+        try:
+            trip_timezone = ZoneInfo(query.get("timezone", "UTC"))
+        except (ZoneInfoNotFoundError, ValueError):
+            return self.json_message(
+                "'timezone' must be an IANA timezone.", status_code=400
+            )
+
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         trips = await store.async_get_trips() if store else []
         vehicles = await store.async_get_vehicle_ids() if store else []
+        if paginated or bounds or query.get("vehicle"):
+            selected = []
+            for index, trip in enumerate(trips):
+                if query.get("vehicle") and trip.get("vehicle") != query["vehicle"]:
+                    continue
+                start = None
+                if trip.get("start_time"):
+                    try:
+                        start = datetime.fromisoformat(trip["start_time"])
+                        if start.tzinfo is None:
+                            start = start.replace(tzinfo=timezone.utc)
+                    except (TypeError, ValueError):
+                        _LOGGER.warning("Trip has an invalid start timestamp")
+                if bounds:
+                    if start is None:
+                        continue
+                    trip_date = start.astimezone(trip_timezone).date()
+                    if not (
+                        bounds.get("from", date.min)
+                        <= trip_date
+                        <= bounds.get("to", date.max)
+                    ):
+                        continue
+                selected.append(
+                    (start.timestamp() if start else float("-inf"), index, trip)
+                )
+            # Storage order breaks timestamp ties deterministically.
+            trips = [
+                trip for _, _, trip in
+                sorted(selected, key=lambda item: item[:2], reverse=True)
+            ]
+        count = len(trips)
+        pagination = {}
+        if paginated:
+            trips = trips[offset:offset + limit]
+            next_offset = offset + len(trips)
+            pagination = {
+                "limit": limit,
+                "offset": offset,
+                "has_more": next_offset < count,
+                "next_offset": next_offset if next_offset < count else None,
+            }
         return self.json(
             {
                 "title": PANEL_TITLE,
                 "trips": trips,
                 "vehicles": vehicles,
-                "count": len(trips),
+                "count": count,
                 "version": get_integration_version(),
+                **pagination,
             }
         )
 

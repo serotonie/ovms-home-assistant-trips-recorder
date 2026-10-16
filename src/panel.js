@@ -1,4 +1,16 @@
-import leafletCss from "leaflet/dist/leaflet.css?inline";
+import { checkFrontendVersion } from "./frontend-version.js";
+import {
+    escapeHtml,
+    renderCount,
+    renderError,
+    renderMap,
+    renderPagination,
+    renderPanel,
+    renderShellFromHtml,
+    renderTripDetails,
+    renderTrips,
+} from "./panel-view.js";
+import { TRANSLATIONS } from "./translations.js";
 
 // Leaflet is loaded lazily (and only once) instead of via a static import so
 // that merely parsing/evaluating this bundle never runs Leaflet's browser
@@ -14,49 +26,7 @@ function loadLeafletModule() {
 }
 
 const PANEL_API = "/api/ovms_trips_recorder/trips";
-const VERSION_STORAGE_KEY = "ovms_trips_recorder_frontend_version";
 const TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
-
-const TRANSLATIONS = {
-    en: { trips: "Trips", trip: "Trip", tripsPlural: "Trips", from: "From", to: "To", vehicle: "Vehicle", allVehicles: "All vehicles", reset: "Reset", noTrips: "No trips match these criteria.", loadingTrips: "Unable to load trips.", ongoing: "Ongoing", gpsPosition: "GPS position recorded", start: "Departure", arrival: "Arrival" },
-    fr: { trips: "Trajets", trip: "Trajet", tripsPlural: "Trajets", from: "Du", to: "Au", vehicle: "Véhicule", allVehicles: "Tous les véhicules", reset: "Réinitialiser", noTrips: "Aucun trajet pour ces critères.", loadingTrips: "Impossible de charger les trajets.", ongoing: "En cours", gpsPosition: "Position GPS enregistrée", start: "Départ", arrival: "Arrivée" },
-    de: { trips: "Fahrten", trip: "Fahrt", tripsPlural: "Fahrten", from: "Von", to: "Bis", vehicle: "Fahrzeug", allVehicles: "Alle Fahrzeuge", reset: "Zurücksetzen", noTrips: "Keine Fahrten für diese Kriterien.", loadingTrips: "Fahrten konnten nicht geladen werden.", ongoing: "Läuft", gpsPosition: "GPS-Position aufgezeichnet", start: "Abfahrt", arrival: "Ankunft" },
-    es: { trips: "Viajes", trip: "Viaje", tripsPlural: "Viajes", from: "Desde", to: "Hasta", vehicle: "Vehículo", allVehicles: "Todos los vehículos", reset: "Restablecer", noTrips: "No hay viajes para estos criterios.", loadingTrips: "No se han podido cargar los viajes.", ongoing: "En curso", gpsPosition: "Posición GPS registrada", start: "Salida", arrival: "Llegada" },
-    it: { trips: "Viaggi", trip: "Viaggio", tripsPlural: "Viaggi", from: "Da", to: "A", vehicle: "Veicolo", allVehicles: "Tutti i veicoli", reset: "Reimposta", noTrips: "Nessun viaggio per questi criteri.", loadingTrips: "Impossibile caricare i viaggi.", ongoing: "In corso", gpsPosition: "Posizione GPS registrata", start: "Partenza", arrival: "Arrivo" },
-    nl: { trips: "Ritten", trip: "Rit", tripsPlural: "Ritten", from: "Van", to: "Tot", vehicle: "Voertuig", allVehicles: "Alle voertuigen", reset: "Resetten", noTrips: "Geen ritten voor deze criteria.", loadingTrips: "Ritten konden niet worden geladen.", ongoing: "Bezig", gpsPosition: "GPS-positie geregistreerd", start: "Vertrek", arrival: "Aankomst" },
-    pt: { trips: "Viagens", trip: "Viagem", tripsPlural: "Viagens", from: "De", to: "Até", vehicle: "Veículo", allVehicles: "Todos os veículos", reset: "Repor", noTrips: "Não existem viagens para estes critérios.", loadingTrips: "Não foi possível carregar as viagens.", ongoing: "Em curso", gpsPosition: "Posição GPS registada", start: "Partida", arrival: "Chegada" },
-    "pt-BR": { trips: "Viagens", trip: "Viagem", tripsPlural: "Viagens", from: "De", to: "Até", vehicle: "Veículo", allVehicles: "Todos os veículos", reset: "Redefinir", noTrips: "Nenhuma viagem corresponde a estes critérios.", loadingTrips: "Não foi possível carregar as viagens.", ongoing: "Em andamento", gpsPosition: "Posição GPS registrada", start: "Partida", arrival: "Chegada" },
-    pl: { trips: "Przejazdy", trip: "Przejazd", tripsPlural: "Przejazdy", from: "Od", to: "Do", vehicle: "Pojazd", allVehicles: "Wszystkie pojazdy", reset: "Resetuj", noTrips: "Brak przejazdów dla tych kryteriów.", loadingTrips: "Nie można załadować przejazdów.", ongoing: "W toku", gpsPosition: "Zarejestrowana pozycja GPS", start: "Odjazd", arrival: "Przyjazd" },
-    ru: { trips: "Поездки", trip: "Поездка", tripsPlural: "Поездки", from: "С", to: "По", vehicle: "Автомобиль", allVehicles: "Все автомобили", reset: "Сбросить", noTrips: "Нет поездок по этим критериям.", loadingTrips: "Не удалось загрузить поездки.", ongoing: "В процессе", gpsPosition: "Позиция GPS записана", start: "Отправление", arrival: "Прибытие" },
-    sv: { trips: "Resor", trip: "Resa", tripsPlural: "Resor", from: "Från", to: "Till", vehicle: "Fordon", allVehicles: "Alla fordon", reset: "Återställ", noTrips: "Inga resor matchar dessa kriterier.", loadingTrips: "Det gick inte att läsa in resor.", ongoing: "Pågår", gpsPosition: "GPS-position registrerad", start: "Avfärd", arrival: "Ankomst" },
-    da: { trips: "Ture", trip: "Tur", tripsPlural: "Ture", from: "Fra", to: "Til", vehicle: "Køretøj", allVehicles: "Alle køretøjer", reset: "Nulstil", noTrips: "Ingen ture matcher disse kriterier.", loadingTrips: "Ture kunne ikke indlæses.", ongoing: "I gang", gpsPosition: "GPS-position registreret", start: "Afgang", arrival: "Ankomst" },
-    no: { trips: "Turer", trip: "Tur", tripsPlural: "Turer", from: "Fra", to: "Til", vehicle: "Kjøretøy", allVehicles: "Alle kjøretøy", reset: "Tilbakestill", noTrips: "Ingen turer samsvarer med disse kriteriene.", loadingTrips: "Kunne ikke laste inn turer.", ongoing: "Pågår", gpsPosition: "GPS-posisjon registrert", start: "Avreise", arrival: "Ankomst" },
-    fi: { trips: "Matkat", trip: "Matka", tripsPlural: "Matkat", from: "Alkaen", to: "Asti", vehicle: "Ajoneuvo", allVehicles: "Kaikki ajoneuvot", reset: "Nollaa", noTrips: "Näillä ehdoilla ei löytynyt matkoja.", loadingTrips: "Matkoja ei voitu ladata.", ongoing: "Käynnissä", gpsPosition: "GPS-sijainti tallennettu", start: "Lähtö", arrival: "Saapuminen" },
-    cs: { trips: "Cesty", trip: "Cesta", tripsPlural: "Cesty", from: "Od", to: "Do", vehicle: "Vozidlo", allVehicles: "Všechna vozidla", reset: "Resetovat", noTrips: "Žádné cesty neodpovídají kritériím.", loadingTrips: "Cesty se nepodařilo načíst.", ongoing: "Probíhá", gpsPosition: "Pozice GPS zaznamenána", start: "Odjezd", arrival: "Příjezd" },
-    tr: { trips: "Sürüşler", trip: "Sürüş", tripsPlural: "Sürüşler", from: "Başlangıç", to: "Bitiş", vehicle: "Araç", allVehicles: "Tüm araçlar", reset: "Sıfırla", noTrips: "Bu ölçütlere uyan sürüş yok.", loadingTrips: "Sürüşler yüklenemedi.", ongoing: "Devam ediyor", gpsPosition: "GPS konumu kaydedildi", start: "Kalkış", arrival: "Varış" },
-    uk: { trips: "Поїздки", trip: "Поїздка", tripsPlural: "Поїздки", from: "Від", to: "До", vehicle: "Автомобіль", allVehicles: "Усі автомобілі", reset: "Скинути", noTrips: "Поїздок за цими критеріями немає.", loadingTrips: "Не вдалося завантажити поїздки.", ongoing: "Триває", gpsPosition: "Позицію GPS записано", start: "Відправлення", arrival: "Прибуття" },
-    ja: { trips: "走行履歴", trip: "走行", tripsPlural: "走行履歴", from: "開始日", to: "終了日", vehicle: "車両", allVehicles: "すべての車両", reset: "リセット", noTrips: "条件に一致する走行はありません。", loadingTrips: "走行履歴を読み込めませんでした。", ongoing: "進行中", gpsPosition: "GPS位置を記録しました", start: "出発", arrival: "到着" },
-    "zh-Hans": { trips: "行程", trip: "行程", tripsPlural: "行程", from: "开始", to: "结束", vehicle: "车辆", allVehicles: "所有车辆", reset: "重置", noTrips: "没有符合这些条件的行程。", loadingTrips: "无法加载行程。", ongoing: "进行中", gpsPosition: "已记录 GPS 位置", start: "出发", arrival: "到达" },
-    "zh-Hant": { trips: "行程", trip: "行程", tripsPlural: "行程", from: "開始", to: "結束", vehicle: "車輛", allVehicles: "所有車輛", reset: "重設", noTrips: "沒有符合這些條件的行程。", loadingTrips: "無法載入行程。", ongoing: "進行中", gpsPosition: "已記錄 GPS 位置", start: "出發", arrival: "抵達" },
-    ko: { trips: "주행 기록", trip: "주행", tripsPlural: "주행 기록", from: "시작", to: "종료", vehicle: "차량", allVehicles: "모든 차량", reset: "초기화", noTrips: "조건에 맞는 주행이 없습니다.", loadingTrips: "주행 기록을 불러올 수 없습니다.", ongoing: "진행 중", gpsPosition: "GPS 위치가 기록되었습니다", start: "출발", arrival: "도착" },
-};
-
-async function checkFrontendVersion(version) {
-    if (!version) return false;
-    try {
-        const known = window.localStorage.getItem(VERSION_STORAGE_KEY);
-        window.localStorage.setItem(VERSION_STORAGE_KEY, version);
-        if (known === null || known === version) return false;
-        if (window.caches) {
-            const keys = await window.caches.keys();
-            await Promise.all(keys.map((key) => window.caches.delete(key)));
-        }
-        window.location.reload();
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
 
 class TripsRecorderPanel extends HTMLElement {
     constructor() {
@@ -70,6 +40,13 @@ class TripsRecorderPanel extends HTMLElement {
         this.loading = false;
         this._narrow = null;
         this.maps = new Map();
+        this.pageSize = 10;
+        this.total = 0;
+        this.hasMore = false;
+        this.nextOffset = 0;
+        this.requestGeneration = 0;
+        this.pendingRefresh = false;
+        this.loadError = false;
     }
 
     set hass(value) {
@@ -104,6 +81,12 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this.requestGeneration++;
+        this.subscriptionGeneration = (this.subscriptionGeneration || 0) + 1;
+        this.loading = false;
+        this.pendingRefresh = false;
+        this.paginationObserver?.disconnect();
+        this.paginationObserver = null;
         if (this.unsubscribeUpdates) {
             this.unsubscribeUpdates();
             this.unsubscribeUpdates = null;
@@ -113,16 +96,17 @@ class TripsRecorderPanel extends HTMLElement {
 
     async subscribeToUpdates() {
         if (!this._hass?.connection?.subscribeEvents || this.unsubscribeUpdates) return;
-        this.unsubscribeUpdates = await this._hass.connection.subscribeEvents(
-            (event) => {
-                if (event?.data?.trips) {
-                    this.updateTrips(event.data.trips);
-                } else {
-                    this.loadTrips();
-                }
+        const generation = this.subscriptionGeneration = (this.subscriptionGeneration || 0) + 1;
+        const unsubscribe = await this._hass.connection.subscribeEvents(
+            () => {
+                if (generation !== this.subscriptionGeneration) return;
+                if (this.loading) this.pendingRefresh = true;
+                else this.loadTrips({ refresh: true });
             },
             TRIP_UPDATED_EVENT,
         );
+        if (generation === this.subscriptionGeneration) this.unsubscribeUpdates = unsubscribe;
+        else unsubscribe();
     }
 
     // Leaflet (and its stylesheet) is bundled directly into panel.js by Vite,
@@ -146,38 +130,104 @@ class TripsRecorderPanel extends HTMLElement {
 
     connectedCallback() {
         this.render();
-        if (this.initialized) this.subscribeToUpdates();
-    }
-
-    async loadTrips() {
-        if (this.loading) return;
-        this.loading = true;
-        try {
-            const response = await fetch(PANEL_API);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            if (await checkFrontendVersion(data.version)) return;
-            this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
-            this.updateTrips(data.trips || []);
-        } catch (error) {
-            this.renderError(this.t("loadingTrips"));
-        } finally {
-            this.loading = false;
+        if (this.initialized) {
+            this.subscribeToUpdates();
+            this.loadTrips({ refresh: true });
         }
     }
 
-    updateTrips(trips) {
+    async loadTrips({ append = false, refresh = false } = {}) {
+        if (append && (this.loading || !this.hasMore)) return;
+        const generation = append ? this.requestGeneration : ++this.requestGeneration;
+        const target = refresh ? Math.max(this.pageSize, this.trips.length) : this.pageSize;
+        if (!append && !refresh) {
+            this.pendingRefresh = false;
+            this.trips = [];
+            this.filteredTrips = [];
+            this.total = 0;
+            this.hasMore = false;
+            this.nextOffset = 0;
+        }
+        this.loading = true;
+        this.loadError = false;
+        if (!append && !refresh) this.render();
+        else this.updatePagination();
+        try {
+            let offset = append ? this.nextOffset : 0;
+            const trips = append ? [...this.trips] : [];
+            let data;
+            do {
+                const limit = Math.min(this.pageSize, append ? this.pageSize : target - trips.length);
+                const parameters = new URLSearchParams({
+                    limit: String(limit),
+                    offset: String(offset),
+                    timezone: this._hass?.config?.time_zone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                });
+                for (const [key, value] of Object.entries(this.filters)) {
+                    if (value) parameters.set(key, value);
+                }
+                const response = await fetch(`${PANEL_API}?${parameters}`);
+                if (generation !== this.requestGeneration) return;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                data = await response.json();
+                if (generation !== this.requestGeneration) return;
+                if (await checkFrontendVersion(data.version)) return;
+                if (generation !== this.requestGeneration) return;
+                if (!Array.isArray(data.trips) || data.trips.length > limit ||
+                    !Number.isInteger(data.count) || data.count < 0 ||
+                    typeof data.has_more !== "boolean" ||
+                    (data.has_more && (!data.trips.length || data.next_offset !== offset + data.trips.length))) {
+                    throw new Error("Invalid paginated trips response");
+                }
+                trips.push(...data.trips);
+                offset = data.next_offset;
+            } while (!append && data.has_more && trips.length < target);
+            this.total = data.count;
+            this.hasMore = data.has_more;
+            this.nextOffset = data.next_offset;
+            this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+            this.updateTrips(trips, { prefiltered: true });
+        } catch (error) {
+            if (generation !== this.requestGeneration) return;
+            console.error("Failed to load trips", error);
+            this.loadError = true;
+            this.failedRequest = { append, refresh };
+        } finally {
+            if (generation === this.requestGeneration) {
+                this.loading = false;
+                this.updatePagination();
+                const refreshPending = this.pendingRefresh;
+                this.pendingRefresh = false;
+                if (refreshPending && !this.loadError) this.loadTrips({ refresh: true });
+            }
+        }
+    }
+
+    updateTrips(trips, { prefiltered = false } = {}) {
         const previousTrips = this.filteredTrips;
-        this.trips = [...trips].sort(
-            (left, right) => new Date(right.start_time) - new Date(left.start_time)
-        );
-        this.applyFilters(false);
+        this.trips = [...trips];
+        if (prefiltered) this.filteredTrips = this.trips;
+        else {
+            this.trips.sort(
+                (left, right) => new Date(right.start_time) - new Date(left.start_time)
+            );
+            this.applyFilters(false);
+        }
         if (this.hasSameTripOrder(previousTrips, this.filteredTrips)) {
+            this.updateTripDetails();
+            this.renderLeafletMaps();
+        } else if (previousTrips.length && this.hasSameTripOrder(
+            previousTrips, this.filteredTrips.slice(0, previousTrips.length)
+        ) && this.shadowRoot.querySelector(".trips-grid")) {
+            this.shadowRoot.querySelector(".trips-grid").insertAdjacentHTML(
+                "beforeend", this.renderTrips(previousTrips.length)
+            );
             this.updateTripDetails();
             this.renderLeafletMaps();
         } else {
             this.render();
         }
+        this.updatePagination();
     }
 
     hasSameTripOrder(left, right) {
@@ -197,10 +247,14 @@ class TripsRecorderPanel extends HTMLElement {
 
     applyFilters(render = true) {
         this.filters = {
-            from: this.shadowRoot.querySelector("#from")?.value || "",
-            to: this.shadowRoot.querySelector("#to")?.value || "",
-            vehicle: this.shadowRoot.querySelector("#vehicle")?.value || "",
+            from: this.shadowRoot.querySelector("#from")?.value ?? this.filters.from,
+            to: this.shadowRoot.querySelector("#to")?.value ?? this.filters.to,
+            vehicle: this.shadowRoot.querySelector("#vehicle")?.value ?? this.filters.vehicle,
         };
+        if (render) {
+            this.loadTrips();
+            return;
+        }
         const { from, to, vehicle } = this.filters;
         const dateFormatter = from || to
             ? new Intl.DateTimeFormat("en-CA", {
@@ -219,7 +273,6 @@ class TripsRecorderPanel extends HTMLElement {
                 (!vehicle || trip.vehicle === vehicle)
             );
         });
-        if (render) this.render();
     }
 
     getCalendarDate(date, formatter) {
@@ -267,111 +320,79 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     render() {
-        if (!this.shadowRoot) return;
-        this.destroyLeafletMaps();
-        const vehicles = [...new Set([
-            ...this.vehicles,
-            ...this.trips.map((trip) => trip.vehicle).filter(Boolean),
-        ])].sort();
-        this.shadowRoot.innerHTML = this.renderShellFromHtml(`
-      <style>
-        ${leafletCss}
-        :host { display: block; height: 100%; color: var(--primary-text-color); }
-        .panel-content { min-height: 100%; }
-        main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
-        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-        .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
-        .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
-        .filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
-        label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
-        input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
-        input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
-        .filters ha-button { align-self: end; }
-        .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-        ha-card { overflow: hidden; }
-        .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
-        .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
-        .trip-map-canvas { display: block; width: 100%; height: 100%; }
-        .trip-details { display: flex; flex-direction: column; padding: 16px; }
-        .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .trip-head { align-items: flex-start; flex-wrap: wrap; }
-        .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
-        .trip-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--primary-color); border-radius: 999px; color: var(--primary-text-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
-        .trip-status::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--primary-color); }
-        .route { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-rows: auto minmax(14px, auto) auto; column-gap: 9px; margin-top: 14px; }
-        .route > .dot { grid-column: 1; justify-self: center; align-self: center; z-index: 1; }
-        .route > .address { grid-column: 2; }
-        .route > .dot:first-child, .route > .address:nth-child(2) { grid-row: 1; }
-        .route > .connector { grid-column: 1; grid-row: 2; justify-self: center; width: 1px; margin-block: -4px; background: var(--divider-color); }
-        .route > .dot.stop, .route > .address:last-child { grid-row: 3; }
-        .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary-color); }
-        .dot.stop { background: var(--accent-color); }
-        .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
-        .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
-        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
-        .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
-        .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
-        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
-      </style>
-      <main>
-                <h1 class="visually-hidden">${this.t("trips")}</h1>
-                <div class="summary"><span class="trip-count">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</span></div>
-        <form class="filters">
-                    <label>${this.t("from")} <input id="from" type="date"></label>
-                    <label>${this.t("to")} <input id="to" type="date"></label>
-                    <label>${this.t("vehicle")} <select id="vehicle"><option value="">${this.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${this.escape(vehicle)}">${this.escape(vehicle)}</option>`).join("")}</select></label>
-                    <ha-button id="reset" appearance="outlined">${this.t("reset")}</ha-button>
-        </form>
-                <div class="trips-grid">${this.renderTrips()}</div>
-      </main>`);
-        const fromField = this.shadowRoot.querySelector("#from");
-        const toField = this.shadowRoot.querySelector("#to");
-        const vehicleField = this.shadowRoot.querySelector("#vehicle");
-        if (fromField) fromField.value = this.filters.from;
-        if (toField) toField.value = this.filters.to;
-        if (vehicleField) vehicleField.value = this.filters.vehicle;
-        this.bindEvents();
+        renderPanel(this);
     }
 
-    renderTrips() {
-        if (!this.filteredTrips.length) return `<div class="empty">${this.escape(this.t("noTrips"))}</div>`;
-        return this.filteredTrips
-            .map(
-                (trip, index) => `
-                    <ha-card class="trip">
-                        <div class="trip-map">${this.renderMap(index)}</div>
-                        <div class="trip-details">${this.renderTripDetails(trip)}
-                        </div>
-                    </ha-card>`
-            )
-            .join("");
+    renderTrips(startIndex = 0) {
+        return renderTrips(this, startIndex);
     }
 
     renderTripDetails(trip) {
-        return `
-            <div class="trip-head"><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${this.escape(this.t("trip"))} &middot; ${this.escape(this.t("ongoing"))}</span>` : ""}</div>
-            <div class="route">
-                <i class="dot"></i><div class="address"><strong>${this.escape(this.formatDate(trip.start_time))}</strong><span>${this.escape(this.formatAddress(trip, "start"))}</span></div>
-                <i class="connector"></i>
-                <i class="dot stop"></i><div class="address"><strong>${this.escape(this.formatDate(trip.stop_time))}</strong><span>${this.escape(this.formatAddress(trip, "stop"))}</span></div>
-            </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
-                `;
+        return renderTripDetails(this, trip);
     }
 
     renderMap(index) {
-        return `<div class="trip-map-canvas" data-index="${index}"></div>`;
+        return renderMap(index);
     }
 
     bindEvents() {
-        this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => this.applyFilters());
+        this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
+        this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
+            const field = this.shadowRoot.querySelector("#page-size");
+            if (!field.checkValidity()) {
+                field.reportValidity();
+                return;
+            }
+            this.pageSize = Number(field.value);
+            this.applyFilters();
+        });
         this.shadowRoot.querySelector("#reset")?.addEventListener("click", () => {
             this.shadowRoot.querySelector(".filters").reset();
+            this.pageSize = 10;
+            this.shadowRoot.querySelector("#page-size").value = "10";
             this.filters = { from: "", to: "", vehicle: "" };
             this.applyFilters();
         });
+        this.updatePagination();
         this.renderLeafletMaps();
+    }
+
+    renderCount() {
+        return renderCount(this);
+    }
+
+    renderPagination() {
+        return renderPagination(this);
+    }
+
+    updatePagination() {
+        this.paginationObserver?.disconnect();
+        this.paginationObserver = null;
+        const footer = this.shadowRoot.querySelector("#pagination");
+        if (!footer) return;
+        footer.innerHTML = this.renderPagination();
+        footer.setAttribute("aria-busy", String(this.loading));
+        const count = this.shadowRoot.querySelector(".trip-count");
+        if (count) count.textContent = this.renderCount();
+        const grid = this.shadowRoot.querySelector(".trips-grid");
+        if (grid && !this.filteredTrips.length) grid.innerHTML = this.renderTrips();
+        const vehicleField = this.shadowRoot.querySelector("#vehicle");
+        if (vehicleField) {
+            const vehicles = [...new Set([...this.vehicles, ...this.trips.map((trip) => trip.vehicle).filter(Boolean)])].sort();
+            vehicleField.innerHTML = `<option value="">${this.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${this.escape(vehicle)}">${this.escape(vehicle)}</option>`).join("")}`;
+            vehicleField.value = this.filters.vehicle;
+        }
+        this.shadowRoot.querySelector("#retry")?.addEventListener("click", () => this.loadTrips(this.failedRequest));
+        this.shadowRoot.querySelector("#load-more")?.addEventListener("click", () => this.loadTrips({ append: true }));
+        if (!this.loading && !this.loadError && this.hasMore && typeof IntersectionObserver === "function") {
+            const observer = new IntersectionObserver((entries) => {
+                if (this.paginationObserver === observer && entries.some((entry) => entry.isIntersecting) && !this.loadError) {
+                    this.loadTrips({ append: true });
+                }
+            }, { rootMargin: "300px" });
+            this.paginationObserver = observer;
+            observer.observe(footer);
+        }
     }
 
     renderLeafletMaps() {
@@ -469,20 +490,15 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     renderShellFromHtml(content) {
-        const menuLabel = this._hass?.localize?.("ui.sidebar.sidebar_toggle") || "Menu";
-        return `<ha-top-app-bar-fixed has-scrolling-content ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon" aria-label="${this.escape(menuLabel)}"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
+        return renderShellFromHtml(this, content);
     }
 
     renderError(message) {
-        this.filteredTrips = [];
-        this.destroyLeafletMaps();
-        if (this.shadowRoot) this.shadowRoot.innerHTML = this.renderShellFromHtml(`<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`);
+        renderError(this, message);
     }
 
     escape(value) {
-        return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
-        })[character]);
+        return escapeHtml(value);
     }
 }
 

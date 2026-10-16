@@ -210,13 +210,7 @@ class TripStore:
     async def async_save(self) -> None:
         """Persist trip data."""
         await self._store.async_save(self._data)
-        self._hass.bus.async_fire(
-            TRIP_UPDATED_EVENT,
-            {
-                "trips": list(self._data.get("trips", []))
-                + list(self._data.get("active", {}).values())
-            },
-        )
+        self._hass.bus.async_fire(TRIP_UPDATED_EVENT)
 
     async def async_get_trips(self) -> list[dict[str, Any]]:
         """Return all stored trips."""
