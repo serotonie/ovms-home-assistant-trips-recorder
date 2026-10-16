@@ -114,6 +114,9 @@ function createFakeLeaflet() {
                 setLatLngs(nextPoints) {
                     this.points = nextPoints;
                 },
+                setStyle(nextOptions) {
+                    this.options = { ...this.options, ...nextOptions };
+                },
                 addTo(map) {
                     map.addLayer(this);
                     return this;
@@ -209,6 +212,48 @@ test("renderTripDetails() affiche l'heure de chaque étape à la place de son li
     assert.match(markup, /<i class="connector"><\/i>/);
     assert.match(markup, /<i class="dot stop"><\/i>/);
     assert.doesNotMatch(markup, /<strong>(?:Departure|Arrival|Départ|Arrivée)<\/strong>/);
+});
+
+test("renderTripDetails() affiche un badge localisé uniquement pour les trajets en cours", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel.locale = "fr";
+    const trip = { vehicle: "OVMS", start_time: "2026-10-16T12:00:00Z", stop_time: null };
+
+    assert.match(panel.renderTripDetails(trip), /class="trip-status">Trajet &middot; En cours<\/span>/);
+    panel.locale = "de";
+    assert.match(panel.renderTripDetails(trip), /class="trip-status">Fahrt &middot; Läuft<\/span>/);
+    panel.locale = "xx";
+    assert.match(panel.renderTripDetails(trip), /class="trip-status">Trip &middot; Ongoing<\/span>/);
+    trip.stop_time = "2026-10-16T13:00:00Z";
+    assert.doesNotMatch(panel.renderTripDetails(trip), /class="trip-status"/);
+});
+
+test("updateTrips() retire le badge quand un trajet se termine sans recréer la carte", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    panel.locale = "fr";
+    const container = { dataset: { index: "0" } };
+    const details = { innerHTML: "" };
+    const card = { querySelector: () => details };
+    panel.shadowRoot.querySelectorAll = (selector) => {
+        if (selector === ".trip-map-canvas") return [container];
+        if (selector === ".trip") return [card];
+        return [];
+    };
+    const trip = {
+        vehicle: "OVMS", start_time: "2026-10-16T12:00:00Z", stop_time: null,
+        waypoints: [{ position_lat: "48", position_long: "2" }],
+    };
+    panel.filteredTrips = [trip];
+
+    panel.updateTrips([trip]);
+    await panel._mapRenderQueue;
+    assert.match(details.innerHTML, /class="trip-status"/);
+
+    panel.updateTrips([{ ...trip, stop_time: "2026-10-16T13:00:00Z" }]);
+    await panel._mapRenderQueue;
+    assert.doesNotMatch(details.innerHTML, /class="trip-status"/);
+    assert.equal(fakeLeaflet.maps.length, 1);
+    assert.equal(fakeLeaflet.polylines[0].options.opacity, 1);
 });
 
 test("render() uses the Home Assistant shell and theme-aligned filters", () => {
@@ -377,6 +422,28 @@ test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et l
     // A single waypoint cannot be fitted into bounds, so it falls back to setView().
     assert.equal(JSON.stringify(fakeLeaflet.maps[1].center), JSON.stringify([49, 3]));
     assert.equal(fakeLeaflet.maps[1].zoom, 15);
+});
+
+test("renderLeafletMaps() affiche le tracé du trajet en cours avec une opacité réduite", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = { dataset: { index: "0" } };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [
+        {
+            vehicle: "OVMS",
+            stop_time: null,
+            waypoints: [{ position_lat: "48.0", position_long: "2.0" }],
+        },
+    ];
+
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.polylines[0].options.opacity, 0.45);
+
+    panel.filteredTrips[0].stop_time = "2026-09-21T10:00:00Z";
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.polylines[0].options.opacity, 1);
 });
 
 test("renderLeafletMaps() réutilise les cartes existantes au lieu d'en recréer", async () => {
