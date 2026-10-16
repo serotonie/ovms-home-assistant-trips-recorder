@@ -7328,15 +7328,17 @@
         .trip-details { display: flex; flex-direction: column; padding: 16px; }
         .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
         .trip-head { align-items: flex-start; }
-        .trip-title { font-size: var(--ha-font-size-m, 16px); font-weight: 600; }
         .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
-        .route { display: grid; grid-template-columns: 14px 1fr; gap: 9px; margin-top: 14px; }
-        .route-line { display: grid; grid-template-rows: 9px 1fr 9px; justify-items: center; }
+        .route { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-rows: auto minmax(14px, auto) auto; column-gap: 9px; margin-top: 14px; }
+        .route > .dot { grid-column: 1; justify-self: center; align-self: center; z-index: 1; }
+        .route > .address { grid-column: 2; }
+        .route > .dot:first-child, .route > .address:nth-child(2) { grid-row: 1; }
+        .route > .connector { grid-column: 1; grid-row: 2; justify-self: center; width: 1px; margin-block: -4px; background: var(--divider-color); }
+        .route > .dot.stop, .route > .address:last-child { grid-row: 3; }
         .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary-color); }
         .dot.stop { background: var(--accent-color); }
-        .connector { width: 1px; background: var(--divider-color); }
-        .address { min-height: 38px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
-        .address strong { color: var(--primary-text-color); font-weight: 500; }
+        .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
+        .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
         .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
         .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
@@ -7373,9 +7375,13 @@
 		}
 		renderTripDetails(trip) {
 			return `
-            <div class="trip-head"><span class="trip-title">${this.escape(this.formatDate(trip.start_time))}</span><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span></div>
-            <div class="route"><div class="route-line"><i class="dot"></i><i class="connector"></i><i class="dot stop"></i></div><div><div class="address"><strong>${this.t("start")}</strong><br>${this.escape(this.formatAddress(trip, "start"))}</div><div class="address"><strong>${this.t("arrival")}</strong><br>${this.escape(this.formatAddress(trip, "stop"))}</div></div></div>
-            <div class="trip-foot"><span>${this.escape(this.formatDate(trip.stop_time))}</span><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
+            <div class="trip-head"><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span></div>
+            <div class="route">
+                <i class="dot"></i><div class="address"><strong>${this.escape(this.formatDate(trip.start_time))}</strong><span>${this.escape(this.formatAddress(trip, "start"))}</span></div>
+                <i class="connector"></i>
+                <i class="dot stop"></i><div class="address"><strong>${this.escape(this.formatDate(trip.stop_time))}</strong><span>${this.escape(this.formatAddress(trip, "stop"))}</span></div>
+            </div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
                 `;
 		}
 		renderMap(index) {
