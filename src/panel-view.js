@@ -48,6 +48,12 @@ export function renderPanel(panel) {
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
         .pagination-error { color: var(--error-color); }
+        .driver-settings { margin-bottom: 24px; }
+        .driver-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-block: 12px; }
+        .trip-driver { margin-block: 12px; }
+        .driver-toggle { display: flex; align-items: center; gap: 8px; }
+        .driver-toggle input { width: auto; min-height: auto; }
+        .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
       </style>
@@ -61,6 +67,7 @@ export function renderPanel(panel) {
                     <label>${panel.t("pageSize")} <input id="page-size" type="number" min="1" max="100" step="1" value="${panel.pageSize}"></label>
                     <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
         </form>
+                <section id="driver-settings" class="driver-settings" aria-live="polite">${renderDriverSettings(panel)}</section>
                 <div class="trips-grid">${panel.renderTrips()}</div>
                 <div id="pagination" class="pagination" aria-live="polite" aria-busy="${panel.loading}">${panel.renderPagination()}</div>
       </main>`);
@@ -93,6 +100,10 @@ export function renderTrips(panel, startIndex = 0) {
 export function renderTripDetails(panel, trip) {
     return `
             <div class="trip-head"><span class="vehicle">${panel.escape(trip.vehicle || panel.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${panel.escape(panel.t("trip"))} &middot; ${panel.escape(panel.t("ongoing"))}</span>` : ""}</div>
+            ${panel.driverControlsEnabled ? `<label class="trip-driver">${panel.escape(panel.t("driver"))}
+                <select data-driver-kind="trip" data-driver-target="${panel.escape(trip.id || "")}" ${!trip.id || !panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(trip.driver)}</select>
+            </label>
+            ${!trip.driver ? `<span class="driver-warning">${panel.escape(panel.t("driverNotSet"))}</span>` : ""}` : ""}
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
@@ -100,6 +111,18 @@ export function renderTripDetails(panel, trip) {
             </div>
             <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
                 `;
+}
+
+export function renderDriverSettings(panel) {
+    return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
+        ${panel._hass?.user?.is_admin ? `<label class="driver-toggle"><input type="checkbox" data-driver-kind="settings" data-driver-target="enabled" ${panel.driverControlsEnabled ? "checked" : ""} ${panel.savingDriver ? "disabled" : ""}>${panel.escape(panel.t("enableDriverControls"))}</label>` : ""}
+        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}
+        ${panel.driverControlsEnabled && panel._hass?.user?.is_admin ? `<details><summary>${panel.escape(panel.t("defaultDrivers"))}</summary>
+            <p>${panel.escape(panel.t("defaultDriverHelp"))}</p>
+            <div class="driver-defaults">${panel.driverVehicles.map((vehicle) => `<label>${panel.escape(vehicle)}
+                <select data-driver-kind="vehicle" data-driver-target="${panel.escape(vehicle)}" ${!panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(panel.driverDefaults[vehicle])}</select>
+            </label>`).join("")}</div>
+        </details>` : ""}`;
 }
 
 export function renderMap(index) {

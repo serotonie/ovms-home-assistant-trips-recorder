@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Callable
+from uuid import uuid4
 
 from geopy.geocoders import Nominatim
 from homeassistant.config_entries import (
@@ -51,12 +52,16 @@ class TripStore:
             self._data = stored
         self._data.setdefault("trips", [])
         self._data.setdefault("active", {})
+        self._data.setdefault("driver_defaults", {})
+        for trip in self._data["trips"] + list(self._data["active"].values()):
+            self._prepare_trip(trip)
         self._data.setdefault("geocode_cache", {})
         self._geocode_cache = self._data["geocode_cache"]
         self._vehicles = {
             vehicle_id: self._new_vehicle_state(trip)
             for vehicle_id, trip in self._data["active"].items()
         }
+        await self.async_save()
 
     async def async_start(self) -> None:
         """Listen to entities provided by the OVMS integration."""
@@ -64,6 +69,9 @@ class TripStore:
             return
         self._started = True
         await self._async_sync_ovms_entries()
+        for trip in await self.async_get_trips():
+            self._prepare_trip(trip)
+        await self.async_save()
         self._ovms_entry_unsub = async_dispatcher_connect(
             self._hass,
             SIGNAL_CONFIG_ENTRY_CHANGED,
@@ -229,9 +237,66 @@ class TripStore:
 
     async def async_add_trip(self, trip: dict[str, Any]) -> dict[str, Any]:
         """Add one trip to the store and persist it."""
+        self._prepare_trip(trip)
         self._data.setdefault("trips", []).append(trip)
         await self.async_save()
         return trip
+
+    def get_drivers(self) -> list[dict[str, str]]:
+        """List person entities, including people currently away or unavailable."""
+        return sorted(
+            [
+                {"id": state.entity_id, "name": state.name}
+                for state in self._hass.states.async_all("person")
+            ],
+            key=lambda person: (person["name"].casefold(), person["id"]),
+        )
+
+    def get_driver_defaults(self) -> dict[str, str]:
+        """Return a copy of the configured per-vehicle defaults."""
+        return dict(self._data.get("driver_defaults", {}))
+
+    @property
+    def driver_controls_enabled(self) -> bool:
+        """Whether driver controls are visible in the panel."""
+        return self._data.get("driver_controls_enabled", False)
+
+    async def async_set_driver_controls_enabled(self, enabled: bool) -> None:
+        """Persist the UI preference without changing automatic assignment."""
+        self._data["driver_controls_enabled"] = enabled
+        await self.async_save()
+
+    def _validate_driver(self, driver: str) -> None:
+        if driver not in {person["id"] for person in self.get_drivers()}:
+            raise ValueError("Choose an existing Home Assistant person.")
+
+    def _prepare_trip(self, trip: dict[str, Any]) -> None:
+        trip.setdefault("id", uuid4().hex)
+        if not trip.get("driver"):
+            driver = self._data.get("driver_defaults", {}).get(trip.get("vehicle"))
+            available = {person["id"] for person in self.get_drivers()}
+            trip["driver"] = driver if driver in available else None
+
+    async def async_set_driver_default(self, vehicle_id: str, driver: str) -> None:
+        """Set a vehicle default and backfill only trips with no driver."""
+        if vehicle_id not in await self.async_get_vehicle_ids():
+            raise KeyError(vehicle_id)
+        self._validate_driver(driver)
+        self._data.setdefault("driver_defaults", {})[vehicle_id] = driver
+        for trip in await self.async_get_trips():
+            if trip.get("vehicle") == vehicle_id and not trip.get("driver"):
+                trip["driver"] = driver
+        await self.async_save()
+
+    async def async_set_trip_driver(self, trip_id: str, driver: str) -> None:
+        """Update a completed or active trip by its persistent ID."""
+        self._validate_driver(driver)
+        for trip in await self.async_get_trips():
+            if trip.get("id") == trip_id:
+                trip["driver"] = driver
+                await self.async_save()
+                return
+        raise KeyError(trip_id)
 
     async def _async_start_trip(self, vehicle_id: str) -> None:
         state = self._vehicles.setdefault(
@@ -250,6 +315,9 @@ class TripStore:
             "distance": 0,
             "waypoints": [],
         }
+        self._prepare_trip(trip)
+        if trip["driver"] is None and self.driver_controls_enabled:
+            _LOGGER.warning("No valid default driver configured for vehicle %s", vehicle_id)
         state["trip"] = trip
         self._data["active"][vehicle_id] = trip
         await self.async_save()
@@ -455,7 +523,11 @@ class TripStore:
 
     async def async_clear(self) -> None:
         """Clear stored trips."""
-        self._data = {"trips": []}
+        self._data = {
+            "trips": [],
+            "driver_defaults": self.get_driver_defaults(),
+            "driver_controls_enabled": self.driver_controls_enabled,
+        }
         self._data["active"] = {}
         self._vehicles.clear()
         for vehicle_id in list(self._timeout_tasks):

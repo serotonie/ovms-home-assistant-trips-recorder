@@ -217,6 +217,91 @@ const paginationTrips = Array.from({ length: 23 }, (_, index) => ({
     stop_time: "2026-11-01T12:00:00Z", waypoints: [],
 }));
 
+test("driver selection escapes person names and keeps deleted assignments visible", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel.driverControlsEnabled = true;
+    panel.drivers = [{ id: "person.alice", name: '<Alice & "Bob">' }];
+    const html = panel.renderTripDetails({ id: "trip-1", driver: "person.alice", waypoints: [] });
+    assert.match(html, /data-driver-kind="trip" data-driver-target="trip-1"/);
+    assert.match(html, /value="person.alice" selected/);
+    assert.match(html, /&lt;Alice &amp; &quot;Bob&quot;&gt;/);
+    assert.doesNotMatch(html, /<Alice/);
+    assert.match(panel.driverOptions("person.deleted"), /person.deleted \(Person unavailable\)/);
+    assert.match(panel.renderTripDetails({ id: "empty" }), /driver-warning">Driver not set/);
+});
+
+test("driver defaults are admin-only and existing choices are rendered per vehicle", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    const settings = { innerHTML: "", querySelector() { return null; } };
+    panel.shadowRoot.querySelector = (selector) => selector === "#driver-settings" ? settings : null;
+    const calls = [];
+    panel._hass = {
+        user: { is_admin: true },
+        async callApi(...args) {
+            calls.push(args);
+            return { enabled: true, drivers: [{ id: "person.alice", name: "Alice" }], defaults: { car: "person.alice" }, vehicles: ["car"] };
+        },
+    };
+    await panel.loadDriverSettings();
+    assert.deepEqual(calls, [["GET", "ovms_trips_recorder/drivers"]]);
+    assert.match(settings.innerHTML, /Default drivers per vehicle/);
+    assert.match(settings.innerHTML, /data-driver-kind="vehicle" data-driver-target="car"/);
+    assert.match(settings.innerHTML, /value="person.alice" selected/);
+    panel._hass.user.is_admin = false;
+    panel.updateDriverSettings();
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind="vehicle"/);
+});
+
+test("editing a driver uses authenticated API and refreshes without dropping loaded trips", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    const calls = [];
+    panel._hass = { async callApi(...args) { calls.push(args); } };
+    panel.loadTrips = async (options) => calls.push(options);
+    const field = { dataset: { driverKind: "trip", driverTarget: "trip /1" }, value: "person.bob" };
+    await panel.saveDriver(field);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["PUT", "ovms_trips_recorder/drivers/trip/trip%20%2F1", { driver: "person.bob" }],
+        { refresh: true },
+    ]);
+    assert.equal(panel.savingDriver, false);
+    assert.equal(panel.driverError, "");
+});
+
+test("driver controls default to hidden and only admins can see the toggle", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    assert.equal(panel.driverControlsEnabled, false);
+    assert.doesNotMatch(panel.renderTripDetails({ id: "trip", driver: "person.alice" }), /trip-driver|driver-warning/);
+    const settings = { innerHTML: "", querySelector() { return null; } };
+    panel.shadowRoot.querySelector = (selector) => selector === "#driver-settings" ? settings : null;
+    panel._hass = { user: { is_admin: false } };
+    panel.updateDriverSettings();
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind|No people/);
+    panel._hass.user.is_admin = true;
+    panel.updateDriverSettings();
+    assert.match(settings.innerHTML, /type="checkbox" data-driver-kind="settings"/);
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind="vehicle"|checked/);
+    const calls = [];
+    panel._hass.callApi = async (...args) => calls.push(args);
+    panel.loadTrips = async () => {};
+    await panel.saveDriver({ dataset: { driverKind: "settings", driverTarget: "enabled" }, checked: true });
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["PUT", "ovms_trips_recorder/drivers/settings/enabled", { enabled: true }],
+    ]);
+});
+
+test("driver load and save failures are visible and do not claim success", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { async callApi() { throw new Error("HTTP 400"); } };
+    await panel.loadDriverSettings();
+    assert.match(panel.driverError, /Unable to load drivers/);
+    let refreshed = false;
+    panel.loadTrips = async () => { refreshed = true; };
+    await panel.saveDriver({ dataset: { driverKind: "vehicle", driverTarget: "car" }, value: "person.deleted" });
+    assert.equal(refreshed, false);
+    assert.match(panel.driverError, /Unable to save the driver/);
+    assert.equal(panel.savingDriver, false);
+});
+
 test("pagination defaults to 10, appends without rebuilding existing cards, and stops at the end", async () => {
     const requests = [];
     const { panel, nodes } = createPaginationPanel(async (url) => {

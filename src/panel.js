@@ -9,6 +9,7 @@ import {
     renderShellFromHtml,
     renderTripDetails,
     renderTrips,
+    renderDriverSettings,
 } from "./panel-view.js";
 import { TRANSLATIONS } from "./translations.js";
 
@@ -32,7 +33,17 @@ class TripsRecorderPanel extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
+        this.shadowRoot.addEventListener?.("change", (event) => {
+            const field = event.target;
+            if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
+        });
         this.trips = [];
+        this.drivers = [];
+        this.driverControlsEnabled = false;
+        this.driverDefaults = {};
+        this.driverVehicles = [];
+        this.driverError = "";
+        this.savingDriver = false;
         this.vehicles = [];
         this.filteredTrips = [];
         this.filters = { from: "", to: "", vehicle: "" };
@@ -186,6 +197,8 @@ class TripsRecorderPanel extends HTMLElement {
             this.hasMore = data.has_more;
             this.nextOffset = data.next_offset;
             this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+            await this.loadDriverSettings();
+            if (generation !== this.requestGeneration) return;
             this.updateTrips(trips, { prefiltered: true });
         } catch (error) {
             if (generation !== this.requestGeneration) return;
@@ -200,6 +213,72 @@ class TripsRecorderPanel extends HTMLElement {
                 this.pendingRefresh = false;
                 if (refreshPending && !this.loadError) this.loadTrips({ refresh: true });
             }
+        }
+    }
+
+    async loadDriverSettings() {
+        if (!this._hass?.callApi) return;
+        try {
+            const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
+            if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) ||
+                !data.defaults || typeof data.defaults !== "object" ||
+                typeof data.enabled !== "boolean") {
+                throw new Error("Invalid driver settings response");
+            }
+            this.drivers = data.drivers;
+            this.driverDefaults = data.defaults;
+            this.driverVehicles = data.vehicles;
+            this.driverControlsEnabled = data.enabled;
+            this.driverError = "";
+        } catch (error) {
+            console.error("Failed to load drivers", error);
+            this.driverError = this.t("driverLoadError");
+        }
+        this.updateDriverSettings();
+    }
+
+    updateDriverSettings() {
+        const settings = this.shadowRoot.querySelector("#driver-settings");
+        if (settings) {
+            const open = settings.querySelector("details")?.open;
+            settings.innerHTML = renderDriverSettings(this);
+            const details = settings.querySelector("details");
+            if (details && open) details.open = true;
+        }
+    }
+
+    driverOptions(selected) {
+        const missing = selected && !this.drivers.some((driver) => driver.id === selected);
+        return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` +
+            (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") +
+            this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
+    }
+
+    async saveDriver(field) {
+        if (this.savingDriver) return;
+        const kind = field.dataset.driverKind;
+        const target = field.dataset.driverTarget;
+        const driver = field.value;
+        this.savingDriver = true;
+        field.disabled = true;
+        this.shadowRoot.querySelectorAll("[data-driver-kind]").forEach((select) => {
+            select.disabled = true;
+        });
+        try {
+            await this._hass.callApi(
+                "PUT",
+                `ovms_trips_recorder/drivers/${kind}/${encodeURIComponent(target)}`,
+                kind === "settings" ? { enabled: field.checked } : { driver },
+            );
+            this.driverError = "";
+            await this.loadTrips({ refresh: true });
+        } catch (error) {
+            console.error("Failed to save driver", error);
+            this.driverError = this.t("driverSaveError");
+        } finally {
+            this.savingDriver = false;
+            this.updateTripDetails();
+            this.updateDriverSettings();
         }
     }
 
