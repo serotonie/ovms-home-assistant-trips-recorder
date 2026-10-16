@@ -25,6 +25,20 @@ the vehicle name and its map route is semi-transparent. Both update live as new
 trip data arrives. When the trip ends, the badge disappears and the route becomes
 fully opaque without recreating the map.
 
+## Results pagination
+
+The sidebar loads the newest trips in batches of **10**. Change **Trips per
+batch** (1–100) in the filters to adjust the batch size for the current panel
+session. Changing a filter or batch size restarts at the newest matching trips;
+**Reset** also restores the batch size to 10.
+
+Scrolling near the bottom automatically loads the next batch. **Load more**
+is also available for keyboard navigation or browsers without infinite-scroll
+support. The counter shows loaded / matching trips until all matches are loaded.
+Loading failures keep existing results and offer **Retry** instead of repeatedly
+retrying automatically. Live trip updates refresh the already-loaded window,
+without loading the entire history or recreating unchanged map containers.
+
 ## Structure
 
 ```text
@@ -254,7 +268,35 @@ list with `count: 0`. Invalid or missing bounds, or `from` later than `to`,
 return HTTP 400; unavailable trip storage returns HTTP 503. Malformed stored
 timestamps are logged and the affected trips are skipped.
 
-The existing endpoint used by the sidebar panel remains unchanged.
+### Sidebar results API
+
+`GET /api/ovms_trips_recorder/trips` accepts optional pagination parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `limit` | Batch size, 1–100 (default 10 when pagination is requested). |
+| `offset` | Number of matching trips to skip (default 0). |
+| `vehicle` | Exact vehicle ID; omitted for all vehicles. |
+| `from`, `to` | Inclusive trip departure dates (`YYYY-MM-DD`), both optional. |
+| `timezone` | IANA timezone for departure-date filters (default `UTC`). |
+
+Supplying `limit` or `offset` enables pagination. Filtering happens before
+pagination; results are newest-first, including ongoing trips. Dates use the
+requested timezone; the panel supplies Home Assistant's configured timezone,
+falling back to the browser timezone. Trips without a start timestamp remain
+available without date filters and sort last.
+
+The response retains `title`, `version`, `vehicles`, `trips`, and `count`.
+`count` is the **total matching** count, not the batch length. Paginated
+responses also include `limit`, `offset`, `has_more`, and `next_offset`
+(`null` at the end). `vehicles` includes all configured/observed vehicles,
+independently of filters. Invalid parameters return HTTP 400.
+
+Without pagination parameters the endpoint still returns the complete list,
+in storage order when unfiltered, for existing clients. The vehicle interval
+endpoint above is unchanged. The `ovms_trips_recorder_updated` event now signals
+invalidation only, without broadcasting the full trip history; clients should
+refetch the results they need.
 
 ## Tests
 

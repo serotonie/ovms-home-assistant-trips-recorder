@@ -2,6 +2,7 @@ import leafletCss from "leaflet/dist/leaflet.css?inline";
 
 export function renderPanel(panel) {
     if (!panel.shadowRoot) return;
+    panel.paginationObserver?.disconnect();
     panel.destroyLeafletMaps();
     const vehicles = [...new Set([
         ...panel.vehicles,
@@ -16,7 +17,7 @@ export function renderPanel(panel) {
         .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
         .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
-        .filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        .filters { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
         label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
         input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
         input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
@@ -45,19 +46,23 @@ export function renderPanel(panel) {
         .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
         .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
+        .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
+        .pagination-error { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
       </style>
       <main>
                 <h1 class="visually-hidden">${panel.t("trips")}</h1>
-                <div class="summary"><span class="trip-count">${panel.filteredTrips.length} ${panel.filteredTrips.length === 1 ? panel.t("trip") : panel.t("tripsPlural")}</span></div>
+                <div class="summary"><span class="trip-count">${panel.renderCount()}</span></div>
         <form class="filters">
                     <label>${panel.t("from")} <input id="from" type="date"></label>
                     <label>${panel.t("to")} <input id="to" type="date"></label>
                     <label>${panel.t("vehicle")} <select id="vehicle"><option value="">${panel.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${panel.escape(vehicle)}">${panel.escape(vehicle)}</option>`).join("")}</select></label>
+                    <label>${panel.t("pageSize")} <input id="page-size" type="number" min="1" max="100" step="1" value="${panel.pageSize}"></label>
                     <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
         </form>
                 <div class="trips-grid">${panel.renderTrips()}</div>
+                <div id="pagination" class="pagination" aria-live="polite" aria-busy="${panel.loading}">${panel.renderPagination()}</div>
       </main>`);
     const fromField = panel.shadowRoot.querySelector("#from");
     const toField = panel.shadowRoot.querySelector("#to");
@@ -69,7 +74,9 @@ export function renderPanel(panel) {
 }
 
 export function renderTrips(panel, startIndex = 0) {
-    if (!panel.filteredTrips.length) return `<div class="empty">${panel.escape(panel.t("noTrips"))}</div>`;
+    if (!panel.filteredTrips.length) {
+        return panel.loading || panel.loadError ? "" : `<div class="empty">${panel.escape(panel.t("noTrips"))}</div>`;
+    }
     return panel.filteredTrips
         .slice(startIndex)
         .map(
@@ -97,6 +104,19 @@ export function renderTripDetails(panel, trip) {
 
 export function renderMap(index) {
     return `<div class="trip-map-canvas" data-index="${index}"></div>`;
+}
+
+export function renderCount(panel) {
+    const count = panel.total || panel.filteredTrips.length;
+    const prefix = panel.hasMore ? `${panel.filteredTrips.length} / ` : "";
+    return `${prefix}${count} ${count === 1 ? panel.t("trip") : panel.t("tripsPlural")}`;
+}
+
+export function renderPagination(panel) {
+    if (panel.loading) return `<span role="status">${panel.escape(panel.t("loading"))}</span>`;
+    if (panel.loadError) return `<span class="pagination-error" role="alert">${panel.escape(panel.t("loadingTrips"))}</span><ha-button id="retry">${panel.escape(panel.t("retry"))}</ha-button>`;
+    if (panel.hasMore) return `<ha-button id="load-more" appearance="outlined">${panel.escape(panel.t("loadMore"))}</ha-button>`;
+    return "";
 }
 
 export function renderShellFromHtml(panel, content) {

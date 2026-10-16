@@ -66,6 +66,24 @@ spec.loader.exec_module(trip_store)
 TripStore = trip_store.TripStore
 
 
+def test_save_notifies_without_broadcasting_all_trips() -> None:
+    store = TripStore.__new__(TripStore)
+    store._data = {"trips": [{"waypoints": [1, 2, 3]}], "active": {}}
+    saved = []
+    events = []
+
+    async def save(data):
+        saved.append(data)
+
+    store._store = types.SimpleNamespace(async_save=save)
+    store._hass = types.SimpleNamespace(
+        bus=types.SimpleNamespace(async_fire=lambda *args: events.append(args))
+    )
+    asyncio.run(store.async_save())
+    assert saved == [store._data]
+    assert events == [(trip_store.TRIP_UPDATED_EVENT,)]
+
+
 def test_ovms_entries_map_directly_to_vehicle_ids() -> None:
     """Vehicle lookup uses the parent integration's config entries."""
     entries = [

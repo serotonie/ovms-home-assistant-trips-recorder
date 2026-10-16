@@ -21,3 +21,31 @@ export const TRANSLATIONS = {
     "zh-Hant": { trips: "行程", trip: "行程", tripsPlural: "行程", from: "開始", to: "結束", vehicle: "車輛", allVehicles: "所有車輛", reset: "重設", noTrips: "沒有符合這些條件的行程。", loadingTrips: "無法載入行程。", ongoing: "進行中", gpsPosition: "已記錄 GPS 位置", start: "出發", arrival: "抵達" },
     ko: { trips: "주행 기록", trip: "주행", tripsPlural: "주행 기록", from: "시작", to: "종료", vehicle: "차량", allVehicles: "모든 차량", reset: "초기화", noTrips: "조건에 맞는 주행이 없습니다.", loadingTrips: "주행 기록을 불러올 수 없습니다.", ongoing: "진행 중", gpsPosition: "GPS 위치가 기록되었습니다", start: "출발", arrival: "도착" },
 };
+
+const PAGINATION_TRANSLATIONS = {
+    en: ["Trips per batch", "Load more", "Loading…", "Retry"],
+    fr: ["Trajets par lot", "Charger plus", "Chargement…", "Réessayer"],
+    de: ["Fahrten pro Abruf", "Mehr laden", "Wird geladen…", "Erneut versuchen"],
+    es: ["Viajes por lote", "Cargar más", "Cargando…", "Reintentar"],
+    it: ["Viaggi per gruppo", "Carica altri", "Caricamento…", "Riprova"],
+    nl: ["Ritten per batch", "Meer laden", "Laden…", "Opnieuw proberen"],
+    pt: ["Viagens por lote", "Carregar mais", "A carregar…", "Tentar novamente"],
+    "pt-BR": ["Viagens por lote", "Carregar mais", "Carregando…", "Tentar novamente"],
+    pl: ["Przejazdy na partię", "Wczytaj więcej", "Wczytywanie…", "Spróbuj ponownie"],
+    ru: ["Поездок за раз", "Загрузить ещё", "Загрузка…", "Повторить"],
+    sv: ["Resor per omgång", "Läs in fler", "Läser in…", "Försök igen"],
+    da: ["Ture pr. hentning", "Indlæs flere", "Indlæser…", "Prøv igen"],
+    no: ["Turer per innlasting", "Last inn flere", "Laster…", "Prøv igjen"],
+    fi: ["Matkoja kerralla", "Lataa lisää", "Ladataan…", "Yritä uudelleen"],
+    cs: ["Cest v dávce", "Načíst další", "Načítání…", "Zkusit znovu"],
+    tr: ["Grup başına sürüş", "Daha fazla yükle", "Yükleniyor…", "Tekrar dene"],
+    uk: ["Поїздок за раз", "Завантажити ще", "Завантаження…", "Повторити"],
+    ja: ["一度に読み込む走行数", "さらに読み込む", "読み込み中…", "再試行"],
+    "zh-Hans": ["每批行程数", "加载更多", "加载中…", "重试"],
+    "zh-Hant": ["每批行程數", "載入更多", "載入中…", "重試"],
+    ko: ["한 번에 불러올 주행 수", "더 불러오기", "불러오는 중…", "다시 시도"],
+};
+
+for (const [language, [pageSize, loadMore, loading, retry]] of Object.entries(PAGINATION_TRANSLATIONS)) {
+    Object.assign(TRANSLATIONS[language], { pageSize, loadMore, loading, retry });
+}

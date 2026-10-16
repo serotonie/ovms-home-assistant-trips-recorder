@@ -112,6 +112,91 @@ def test_trips_endpoint_returns_version_without_store() -> None:
     assert data["count"] == 0
 
 
+def _panel_request(trips, query):
+    view = panel.TripsRecorderApiView(FakeHass(FakeStore(trips)))
+    return asyncio.run(view.get(types.SimpleNamespace(query=query)))
+
+
+def test_panel_pagination_sorts_before_slicing_and_reports_total() -> None:
+    trips = [
+        {"start_time": f"2026-10-{day:02d}T10:00:00Z", "vehicle": "car"}
+        for day in range(1, 24)
+    ]
+    data = _panel_request(trips, {"limit": "10"})
+    assert data["trips"] == list(reversed(trips[-10:]))
+    assert data["count"] == 23
+    assert data["next_offset"] == 10
+    assert data["has_more"] is True
+
+    second = _panel_request(trips, {"limit": "10", "offset": "10"})
+    last = _panel_request(trips, {"limit": "10", "offset": "20"})
+    assert data["trips"] + second["trips"] + last["trips"] == list(reversed(trips))
+    assert last["next_offset"] is None
+    assert last["has_more"] is False
+    assert last["count"] == 23
+
+
+def test_panel_filters_before_pagination_in_requested_timezone() -> None:
+    trips = [
+        {"start_time": "2026-01-01T02:00:00Z", "vehicle": "car"},
+        {"start_time": "2026-01-01T03:00:00Z", "vehicle": "other"},
+        {"start_time": "2026-01-01T06:00:00Z", "vehicle": "car"},
+    ]
+    data = _panel_request(trips, {
+        "limit": "1", "from": "2025-12-31", "to": "2025-12-31",
+        "vehicle": "car", "timezone": "America/New_York",
+    })
+    assert data["trips"] == trips[:1]
+    assert data["count"] == 1
+    assert data["has_more"] is False
+    assert data["vehicles"] == ["car"]
+
+
+@pytest.mark.parametrize("query", [
+    {"limit": "0"}, {"limit": "101"}, {"limit": "abc"}, {"limit": "1.5"},
+    {"offset": "-1"}, {"offset": "bad"}, {"from": "bad"}, {"to": "2026-02-30"},
+    {"from": "2026-10-02", "to": "2026-10-01"}, {"timezone": "Not/AZone"},
+])
+def test_panel_rejects_invalid_pagination_and_filters(query) -> None:
+    assert _panel_request([], query)["status_code"] == 400
+
+
+def test_panel_empty_out_of_range_and_default_batch() -> None:
+    trips = [{"start_time": None, "vehicle": "car"} for _ in range(12)]
+    default = _panel_request(trips, {"offset": "0"})
+    assert len(default["trips"]) == 10
+    for source, query in [([], {"limit": "10"}), (trips, {"limit": "10", "offset": "99"})]:
+        data = _panel_request(source, query)
+        assert data["trips"] == []
+        assert data["has_more"] is False
+        assert data["next_offset"] is None
+        assert data["count"] == len(source)
+
+
+def test_panel_sort_handles_offsets_missing_dates_and_ties() -> None:
+    trips = [
+        {"vehicle": "car", "start_time": None},
+        {"vehicle": "car", "start_time": "2026-01-01T12:00:00+02:00"},
+        {"vehicle": "car", "start_time": "2026-01-01T10:00:00Z"},
+        {"vehicle": "car", "start_time": "2026-01-01T11:00:00"},
+    ]
+    data = _panel_request(trips, {"limit": "100"})
+    assert data["trips"] == [trips[3], trips[2], trips[1], trips[0]]
+
+
+def test_panel_date_filter_handles_legacy_and_invalid_start_times(caplog) -> None:
+    legacy = {"vehicle": "car", "start_time": "2026-01-01T02:00:00"}
+    data = _panel_request([
+        legacy, {"start_time": None}, {"start_time": "invalid"},
+    ], {
+        "limit": "10", "from": "2025-12-31", "to": "2025-12-31",
+        "timezone": "America/New_York",
+    })
+    assert data["trips"] == [legacy]
+    assert data["count"] == 1
+    assert "invalid start timestamp" in caplog.text
+
+
 def _vehicle_request(trips, query=None):
     view = panel.VehicleTripsApiView(FakeHass(FakeStore(trips)))
     request = types.SimpleNamespace(

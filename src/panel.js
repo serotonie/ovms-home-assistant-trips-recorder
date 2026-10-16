@@ -1,8 +1,10 @@
 import { checkFrontendVersion } from "./frontend-version.js";
 import {
     escapeHtml,
+    renderCount,
     renderError,
     renderMap,
+    renderPagination,
     renderPanel,
     renderShellFromHtml,
     renderTripDetails,
@@ -38,6 +40,13 @@ class TripsRecorderPanel extends HTMLElement {
         this.loading = false;
         this._narrow = null;
         this.maps = new Map();
+        this.pageSize = 10;
+        this.total = 0;
+        this.hasMore = false;
+        this.nextOffset = 0;
+        this.requestGeneration = 0;
+        this.pendingRefresh = false;
+        this.loadError = false;
     }
 
     set hass(value) {
@@ -72,6 +81,12 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this.requestGeneration++;
+        this.subscriptionGeneration = (this.subscriptionGeneration || 0) + 1;
+        this.loading = false;
+        this.pendingRefresh = false;
+        this.paginationObserver?.disconnect();
+        this.paginationObserver = null;
         if (this.unsubscribeUpdates) {
             this.unsubscribeUpdates();
             this.unsubscribeUpdates = null;
@@ -81,16 +96,17 @@ class TripsRecorderPanel extends HTMLElement {
 
     async subscribeToUpdates() {
         if (!this._hass?.connection?.subscribeEvents || this.unsubscribeUpdates) return;
-        this.unsubscribeUpdates = await this._hass.connection.subscribeEvents(
-            (event) => {
-                if (event?.data?.trips) {
-                    this.updateTrips(event.data.trips);
-                } else {
-                    this.loadTrips();
-                }
+        const generation = this.subscriptionGeneration = (this.subscriptionGeneration || 0) + 1;
+        const unsubscribe = await this._hass.connection.subscribeEvents(
+            () => {
+                if (generation !== this.subscriptionGeneration) return;
+                if (this.loading) this.pendingRefresh = true;
+                else this.loadTrips({ refresh: true });
             },
             TRIP_UPDATED_EVENT,
         );
+        if (generation === this.subscriptionGeneration) this.unsubscribeUpdates = unsubscribe;
+        else unsubscribe();
     }
 
     // Leaflet (and its stylesheet) is bundled directly into panel.js by Vite,
@@ -114,38 +130,104 @@ class TripsRecorderPanel extends HTMLElement {
 
     connectedCallback() {
         this.render();
-        if (this.initialized) this.subscribeToUpdates();
-    }
-
-    async loadTrips() {
-        if (this.loading) return;
-        this.loading = true;
-        try {
-            const response = await fetch(PANEL_API);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            if (await checkFrontendVersion(data.version)) return;
-            this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
-            this.updateTrips(data.trips || []);
-        } catch (error) {
-            this.renderError(this.t("loadingTrips"));
-        } finally {
-            this.loading = false;
+        if (this.initialized) {
+            this.subscribeToUpdates();
+            this.loadTrips({ refresh: true });
         }
     }
 
-    updateTrips(trips) {
+    async loadTrips({ append = false, refresh = false } = {}) {
+        if (append && (this.loading || !this.hasMore)) return;
+        const generation = append ? this.requestGeneration : ++this.requestGeneration;
+        const target = refresh ? Math.max(this.pageSize, this.trips.length) : this.pageSize;
+        if (!append && !refresh) {
+            this.pendingRefresh = false;
+            this.trips = [];
+            this.filteredTrips = [];
+            this.total = 0;
+            this.hasMore = false;
+            this.nextOffset = 0;
+        }
+        this.loading = true;
+        this.loadError = false;
+        if (!append && !refresh) this.render();
+        else this.updatePagination();
+        try {
+            let offset = append ? this.nextOffset : 0;
+            const trips = append ? [...this.trips] : [];
+            let data;
+            do {
+                const limit = Math.min(this.pageSize, append ? this.pageSize : target - trips.length);
+                const parameters = new URLSearchParams({
+                    limit: String(limit),
+                    offset: String(offset),
+                    timezone: this._hass?.config?.time_zone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                });
+                for (const [key, value] of Object.entries(this.filters)) {
+                    if (value) parameters.set(key, value);
+                }
+                const response = await fetch(`${PANEL_API}?${parameters}`);
+                if (generation !== this.requestGeneration) return;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                data = await response.json();
+                if (generation !== this.requestGeneration) return;
+                if (await checkFrontendVersion(data.version)) return;
+                if (generation !== this.requestGeneration) return;
+                if (!Array.isArray(data.trips) || data.trips.length > limit ||
+                    !Number.isInteger(data.count) || data.count < 0 ||
+                    typeof data.has_more !== "boolean" ||
+                    (data.has_more && (!data.trips.length || data.next_offset !== offset + data.trips.length))) {
+                    throw new Error("Invalid paginated trips response");
+                }
+                trips.push(...data.trips);
+                offset = data.next_offset;
+            } while (!append && data.has_more && trips.length < target);
+            this.total = data.count;
+            this.hasMore = data.has_more;
+            this.nextOffset = data.next_offset;
+            this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+            this.updateTrips(trips, { prefiltered: true });
+        } catch (error) {
+            if (generation !== this.requestGeneration) return;
+            console.error("Failed to load trips", error);
+            this.loadError = true;
+            this.failedRequest = { append, refresh };
+        } finally {
+            if (generation === this.requestGeneration) {
+                this.loading = false;
+                this.updatePagination();
+                const refreshPending = this.pendingRefresh;
+                this.pendingRefresh = false;
+                if (refreshPending && !this.loadError) this.loadTrips({ refresh: true });
+            }
+        }
+    }
+
+    updateTrips(trips, { prefiltered = false } = {}) {
         const previousTrips = this.filteredTrips;
-        this.trips = [...trips].sort(
-            (left, right) => new Date(right.start_time) - new Date(left.start_time)
-        );
-        this.applyFilters(false);
+        this.trips = [...trips];
+        if (prefiltered) this.filteredTrips = this.trips;
+        else {
+            this.trips.sort(
+                (left, right) => new Date(right.start_time) - new Date(left.start_time)
+            );
+            this.applyFilters(false);
+        }
         if (this.hasSameTripOrder(previousTrips, this.filteredTrips)) {
+            this.updateTripDetails();
+            this.renderLeafletMaps();
+        } else if (previousTrips.length && this.hasSameTripOrder(
+            previousTrips, this.filteredTrips.slice(0, previousTrips.length)
+        ) && this.shadowRoot.querySelector(".trips-grid")) {
+            this.shadowRoot.querySelector(".trips-grid").insertAdjacentHTML(
+                "beforeend", this.renderTrips(previousTrips.length)
+            );
             this.updateTripDetails();
             this.renderLeafletMaps();
         } else {
             this.render();
         }
+        this.updatePagination();
     }
 
     hasSameTripOrder(left, right) {
@@ -165,10 +247,14 @@ class TripsRecorderPanel extends HTMLElement {
 
     applyFilters(render = true) {
         this.filters = {
-            from: this.shadowRoot.querySelector("#from")?.value || "",
-            to: this.shadowRoot.querySelector("#to")?.value || "",
-            vehicle: this.shadowRoot.querySelector("#vehicle")?.value || "",
+            from: this.shadowRoot.querySelector("#from")?.value ?? this.filters.from,
+            to: this.shadowRoot.querySelector("#to")?.value ?? this.filters.to,
+            vehicle: this.shadowRoot.querySelector("#vehicle")?.value ?? this.filters.vehicle,
         };
+        if (render) {
+            this.loadTrips();
+            return;
+        }
         const { from, to, vehicle } = this.filters;
         const dateFormatter = from || to
             ? new Intl.DateTimeFormat("en-CA", {
@@ -187,7 +273,6 @@ class TripsRecorderPanel extends HTMLElement {
                 (!vehicle || trip.vehicle === vehicle)
             );
         });
-        if (render) this.render();
     }
 
     getCalendarDate(date, formatter) {
@@ -251,13 +336,63 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     bindEvents() {
-        this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => this.applyFilters());
+        this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
+        this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
+            const field = this.shadowRoot.querySelector("#page-size");
+            if (!field.checkValidity()) {
+                field.reportValidity();
+                return;
+            }
+            this.pageSize = Number(field.value);
+            this.applyFilters();
+        });
         this.shadowRoot.querySelector("#reset")?.addEventListener("click", () => {
             this.shadowRoot.querySelector(".filters").reset();
+            this.pageSize = 10;
+            this.shadowRoot.querySelector("#page-size").value = "10";
             this.filters = { from: "", to: "", vehicle: "" };
             this.applyFilters();
         });
+        this.updatePagination();
         this.renderLeafletMaps();
+    }
+
+    renderCount() {
+        return renderCount(this);
+    }
+
+    renderPagination() {
+        return renderPagination(this);
+    }
+
+    updatePagination() {
+        this.paginationObserver?.disconnect();
+        this.paginationObserver = null;
+        const footer = this.shadowRoot.querySelector("#pagination");
+        if (!footer) return;
+        footer.innerHTML = this.renderPagination();
+        footer.setAttribute("aria-busy", String(this.loading));
+        const count = this.shadowRoot.querySelector(".trip-count");
+        if (count) count.textContent = this.renderCount();
+        const grid = this.shadowRoot.querySelector(".trips-grid");
+        if (grid && !this.filteredTrips.length) grid.innerHTML = this.renderTrips();
+        const vehicleField = this.shadowRoot.querySelector("#vehicle");
+        if (vehicleField) {
+            const vehicles = [...new Set([...this.vehicles, ...this.trips.map((trip) => trip.vehicle).filter(Boolean)])].sort();
+            vehicleField.innerHTML = `<option value="">${this.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${this.escape(vehicle)}">${this.escape(vehicle)}</option>`).join("")}`;
+            vehicleField.value = this.filters.vehicle;
+        }
+        this.shadowRoot.querySelector("#retry")?.addEventListener("click", () => this.loadTrips(this.failedRequest));
+        this.shadowRoot.querySelector("#load-more")?.addEventListener("click", () => this.loadTrips({ append: true }));
+        if (!this.loading && !this.loadError && this.hasMore && typeof IntersectionObserver === "function") {
+            const observer = new IntersectionObserver((entries) => {
+                if (this.paginationObserver === observer && entries.some((entry) => entry.isIntersecting) && !this.loadError) {
+                    this.loadTrips({ append: true });
+                }
+            }, { rootMargin: "300px" });
+            this.paginationObserver = observer;
+            observer.observe(footer);
+        }
     }
 
     renderLeafletMaps() {
