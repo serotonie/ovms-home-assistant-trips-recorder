@@ -22,8 +22,474 @@
 		enumerable: true
 	}) : target, mod));
 	//#endregion
+	//#region src/frontend-version.js
+	var VERSION_STORAGE_KEY = "ovms_trips_recorder_frontend_version";
+	async function checkFrontendVersion(version) {
+		if (!version) return false;
+		try {
+			const known = window.localStorage.getItem(VERSION_STORAGE_KEY);
+			window.localStorage.setItem(VERSION_STORAGE_KEY, version);
+			if (known === null || known === version) return false;
+			if (window.caches) {
+				const keys = await window.caches.keys();
+				await Promise.all(keys.map((key) => window.caches.delete(key)));
+			}
+			window.location.reload();
+			return true;
+		} catch (error) {
+			return false;
+		}
+	}
+	//#endregion
 	//#region node_modules/leaflet/dist/leaflet.css?inline
 	var leaflet_default = "/* required styles */\r\n\r\n.leaflet-pane,\r\n.leaflet-tile,\r\n.leaflet-marker-icon,\r\n.leaflet-marker-shadow,\r\n.leaflet-tile-container,\r\n.leaflet-pane > svg,\r\n.leaflet-pane > canvas,\r\n.leaflet-zoom-box,\r\n.leaflet-image-layer,\r\n.leaflet-layer {\r\n	position: absolute;\r\n	left: 0;\r\n	top: 0;\r\n	}\r\n.leaflet-container {\r\n	overflow: hidden;\r\n	}\r\n.leaflet-tile,\r\n.leaflet-marker-icon,\r\n.leaflet-marker-shadow {\r\n	-webkit-user-select: none;\r\n	   -moz-user-select: none;\r\n	        user-select: none;\r\n	  -webkit-user-drag: none;\r\n	}\r\n/* Prevents IE11 from highlighting tiles in blue */\r\n.leaflet-tile::selection {\r\n	background: transparent;\r\n}\r\n/* Safari renders non-retina tile on retina better with this, but Chrome is worse */\r\n.leaflet-safari .leaflet-tile {\r\n	image-rendering: -webkit-optimize-contrast;\r\n	}\r\n/* hack that prevents hw layers \"stretching\" when loading new tiles */\r\n.leaflet-safari .leaflet-tile-container {\r\n	width: 1600px;\r\n	height: 1600px;\r\n	-webkit-transform-origin: 0 0;\r\n	}\r\n.leaflet-marker-icon,\r\n.leaflet-marker-shadow {\r\n	display: block;\r\n	}\r\n/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */\r\n/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */\r\n.leaflet-container .leaflet-overlay-pane svg {\r\n	max-width: none !important;\r\n	max-height: none !important;\r\n	}\r\n.leaflet-container .leaflet-marker-pane img,\r\n.leaflet-container .leaflet-shadow-pane img,\r\n.leaflet-container .leaflet-tile-pane img,\r\n.leaflet-container img.leaflet-image-layer,\r\n.leaflet-container .leaflet-tile {\r\n	max-width: none !important;\r\n	max-height: none !important;\r\n	width: auto;\r\n	padding: 0;\r\n	}\r\n\r\n.leaflet-container img.leaflet-tile {\r\n	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */\r\n	mix-blend-mode: plus-lighter;\r\n}\r\n\r\n.leaflet-container.leaflet-touch-zoom {\r\n	-ms-touch-action: pan-x pan-y;\r\n	touch-action: pan-x pan-y;\r\n	}\r\n.leaflet-container.leaflet-touch-drag {\r\n	-ms-touch-action: pinch-zoom;\r\n	/* Fallback for FF which doesn't support pinch-zoom */\r\n	touch-action: none;\r\n	touch-action: pinch-zoom;\r\n}\r\n.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {\r\n	-ms-touch-action: none;\r\n	touch-action: none;\r\n}\r\n.leaflet-container {\r\n	-webkit-tap-highlight-color: transparent;\r\n}\r\n.leaflet-container a {\r\n	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);\r\n}\r\n.leaflet-tile {\r\n	filter: inherit;\r\n	visibility: hidden;\r\n	}\r\n.leaflet-tile-loaded {\r\n	visibility: inherit;\r\n	}\r\n.leaflet-zoom-box {\r\n	width: 0;\r\n	height: 0;\r\n	-moz-box-sizing: border-box;\r\n	     box-sizing: border-box;\r\n	z-index: 800;\r\n	}\r\n/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */\r\n.leaflet-overlay-pane svg {\r\n	-moz-user-select: none;\r\n	}\r\n\r\n.leaflet-pane         { z-index: 400; }\r\n\r\n.leaflet-tile-pane    { z-index: 200; }\r\n.leaflet-overlay-pane { z-index: 400; }\r\n.leaflet-shadow-pane  { z-index: 500; }\r\n.leaflet-marker-pane  { z-index: 600; }\r\n.leaflet-tooltip-pane   { z-index: 650; }\r\n.leaflet-popup-pane   { z-index: 700; }\r\n\r\n.leaflet-map-pane canvas { z-index: 100; }\r\n.leaflet-map-pane svg    { z-index: 200; }\r\n\r\n.leaflet-vml-shape {\r\n	width: 1px;\r\n	height: 1px;\r\n	}\r\n.lvml {\r\n	behavior: url(#default#VML);\r\n	display: inline-block;\r\n	position: absolute;\r\n	}\r\n\r\n\r\n/* control positioning */\r\n\r\n.leaflet-control {\r\n	position: relative;\r\n	z-index: 800;\r\n	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */\r\n	pointer-events: auto;\r\n	}\r\n.leaflet-top,\r\n.leaflet-bottom {\r\n	position: absolute;\r\n	z-index: 1000;\r\n	pointer-events: none;\r\n	}\r\n.leaflet-top {\r\n	top: 0;\r\n	}\r\n.leaflet-right {\r\n	right: 0;\r\n	}\r\n.leaflet-bottom {\r\n	bottom: 0;\r\n	}\r\n.leaflet-left {\r\n	left: 0;\r\n	}\r\n.leaflet-control {\r\n	float: left;\r\n	clear: both;\r\n	}\r\n.leaflet-right .leaflet-control {\r\n	float: right;\r\n	}\r\n.leaflet-top .leaflet-control {\r\n	margin-top: 10px;\r\n	}\r\n.leaflet-bottom .leaflet-control {\r\n	margin-bottom: 10px;\r\n	}\r\n.leaflet-left .leaflet-control {\r\n	margin-left: 10px;\r\n	}\r\n.leaflet-right .leaflet-control {\r\n	margin-right: 10px;\r\n	}\r\n\r\n\r\n/* zoom and fade animations */\r\n\r\n.leaflet-fade-anim .leaflet-popup {\r\n	opacity: 0;\r\n	-webkit-transition: opacity 0.2s linear;\r\n	   -moz-transition: opacity 0.2s linear;\r\n	        transition: opacity 0.2s linear;\r\n	}\r\n.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {\r\n	opacity: 1;\r\n	}\r\n.leaflet-zoom-animated {\r\n	-webkit-transform-origin: 0 0;\r\n	    -ms-transform-origin: 0 0;\r\n	        transform-origin: 0 0;\r\n	}\r\nsvg.leaflet-zoom-animated {\r\n	will-change: transform;\r\n}\r\n\r\n.leaflet-zoom-anim .leaflet-zoom-animated {\r\n	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);\r\n	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);\r\n	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);\r\n	}\r\n.leaflet-zoom-anim .leaflet-tile,\r\n.leaflet-pan-anim .leaflet-tile {\r\n	-webkit-transition: none;\r\n	   -moz-transition: none;\r\n	        transition: none;\r\n	}\r\n\r\n.leaflet-zoom-anim .leaflet-zoom-hide {\r\n	visibility: hidden;\r\n	}\r\n\r\n\r\n/* cursors */\r\n\r\n.leaflet-interactive {\r\n	cursor: pointer;\r\n	}\r\n.leaflet-grab {\r\n	cursor: -webkit-grab;\r\n	cursor:    -moz-grab;\r\n	cursor:         grab;\r\n	}\r\n.leaflet-crosshair,\r\n.leaflet-crosshair .leaflet-interactive {\r\n	cursor: crosshair;\r\n	}\r\n.leaflet-popup-pane,\r\n.leaflet-control {\r\n	cursor: auto;\r\n	}\r\n.leaflet-dragging .leaflet-grab,\r\n.leaflet-dragging .leaflet-grab .leaflet-interactive,\r\n.leaflet-dragging .leaflet-marker-draggable {\r\n	cursor: move;\r\n	cursor: -webkit-grabbing;\r\n	cursor:    -moz-grabbing;\r\n	cursor:         grabbing;\r\n	}\r\n\r\n/* marker & overlays interactivity */\r\n.leaflet-marker-icon,\r\n.leaflet-marker-shadow,\r\n.leaflet-image-layer,\r\n.leaflet-pane > svg path,\r\n.leaflet-tile-container {\r\n	pointer-events: none;\r\n	}\r\n\r\n.leaflet-marker-icon.leaflet-interactive,\r\n.leaflet-image-layer.leaflet-interactive,\r\n.leaflet-pane > svg path.leaflet-interactive,\r\nsvg.leaflet-image-layer.leaflet-interactive path {\r\n	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */\r\n	pointer-events: auto;\r\n	}\r\n\r\n/* visual tweaks */\r\n\r\n.leaflet-container {\r\n	background: #ddd;\r\n	outline-offset: 1px;\r\n	}\r\n.leaflet-container a {\r\n	color: #0078A8;\r\n	}\r\n.leaflet-zoom-box {\r\n	border: 2px dotted #38f;\r\n	background: rgba(255,255,255,0.5);\r\n	}\r\n\r\n\r\n/* general typography */\r\n.leaflet-container {\r\n	font-family: \"Helvetica Neue\", Arial, Helvetica, sans-serif;\r\n	font-size: 12px;\r\n	font-size: 0.75rem;\r\n	line-height: 1.5;\r\n	}\r\n\r\n\r\n/* general toolbar styles */\r\n\r\n.leaflet-bar {\r\n	box-shadow: 0 1px 5px rgba(0,0,0,0.65);\r\n	border-radius: 4px;\r\n	}\r\n.leaflet-bar a {\r\n	background-color: #fff;\r\n	border-bottom: 1px solid #ccc;\r\n	width: 26px;\r\n	height: 26px;\r\n	line-height: 26px;\r\n	display: block;\r\n	text-align: center;\r\n	text-decoration: none;\r\n	color: black;\r\n	}\r\n.leaflet-bar a,\r\n.leaflet-control-layers-toggle {\r\n	background-position: 50% 50%;\r\n	background-repeat: no-repeat;\r\n	display: block;\r\n	}\r\n.leaflet-bar a:hover,\r\n.leaflet-bar a:focus {\r\n	background-color: #f4f4f4;\r\n	}\r\n.leaflet-bar a:first-child {\r\n	border-top-left-radius: 4px;\r\n	border-top-right-radius: 4px;\r\n	}\r\n.leaflet-bar a:last-child {\r\n	border-bottom-left-radius: 4px;\r\n	border-bottom-right-radius: 4px;\r\n	border-bottom: none;\r\n	}\r\n.leaflet-bar a.leaflet-disabled {\r\n	cursor: default;\r\n	background-color: #f4f4f4;\r\n	color: #bbb;\r\n	}\r\n\r\n.leaflet-touch .leaflet-bar a {\r\n	width: 30px;\r\n	height: 30px;\r\n	line-height: 30px;\r\n	}\r\n.leaflet-touch .leaflet-bar a:first-child {\r\n	border-top-left-radius: 2px;\r\n	border-top-right-radius: 2px;\r\n	}\r\n.leaflet-touch .leaflet-bar a:last-child {\r\n	border-bottom-left-radius: 2px;\r\n	border-bottom-right-radius: 2px;\r\n	}\r\n\r\n/* zoom control */\r\n\r\n.leaflet-control-zoom-in,\r\n.leaflet-control-zoom-out {\r\n	font: bold 18px 'Lucida Console', Monaco, monospace;\r\n	text-indent: 1px;\r\n	}\r\n\r\n.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {\r\n	font-size: 22px;\r\n	}\r\n\r\n\r\n/* layers control */\r\n\r\n.leaflet-control-layers {\r\n	box-shadow: 0 1px 5px rgba(0,0,0,0.4);\r\n	background: #fff;\r\n	border-radius: 5px;\r\n	}\r\n.leaflet-control-layers-toggle {\r\n	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAQAAAADQ4RFAAACf0lEQVR4AY1UM3gkARTePdvdoTxXKc+qTl3aU5U6b2Kbkz3Gtq3Zw6ziLGNPzrYx7946Tr6/ee/XeCQ4D3ykPtL5tHno4n0d/h3+xfuWHGLX81cn7r0iTNzjr7LrlxCqPtkbTQEHeqOrTy4Yyt3VCi/IOB0v7rVC7q45Q3Gr5K6jt+3Gl5nCoDD4MtO+j96Wu8atmhGqcNGHObuf8OM/x3AMx38+4Z2sPqzCxRFK2aF2e5Jol56XTLyggAMTL56XOMoS1W4pOyjUcGGQdZxU6qRh7B9Zp+PfpOFlqt0zyDZckPi1ttmIp03jX8gyJ8a/PG2yutpS/Vol7peZIbZcKBAEEheEIAgFbDkz5H6Zrkm2hVWGiXKiF4Ycw0RWKdtC16Q7qe3X4iOMxruonzegJzWaXFrU9utOSsLUmrc0YjeWYjCW4PDMADElpJSSQ0vQvA1Tm6/JlKnqFs1EGyZiFCqnRZTEJJJiKRYzVYzJck2Rm6P4iH+cmSY0YzimYa8l0EtTODFWhcMIMVqdsI2uiTvKmTisIDHJ3od5GILVhBCarCfVRmo4uTjkhrhzkiBV7SsaqS+TzrzM1qpGGUFt28pIySQHR6h7F6KSwGWm97ay+Z+ZqMcEjEWebE7wxCSQwpkhJqoZA5ivCdZDjJepuJ9IQjGGUmuXJdBFUygxVqVsxFsLMbDe8ZbDYVCGKxs+W080max1hFCarCfV+C1KATwcnvE9gRRuMP2prdbWGowm1KB1y+zwMMENkM755cJ2yPDtqhTI6ED1M/82yIDtC/4j4BijjeObflpO9I9MwXTCsSX8jWAFeHr05WoLTJ5G8IQVS/7vwR6ohirYM7f6HzYpogfS3R2OAAAAAElFTkSuQmCC);\r\n	width: 36px;\r\n	height: 36px;\r\n	}\r\n.leaflet-retina .leaflet-control-layers-toggle {\r\n	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADQAAAA0CAQAAABvcdNgAAAEsklEQVR4AWL4TydIhpZK1kpWOlg0w3ZXP6D2soBtG42jeI6ZmQTHzAxiTbSJsYLjO9HhP+WOmcuhciVnmHVQcJnp7DFvScowZorad/+V/fVzMdMT2g9Cv9guXGv/7pYOrXh2U+RRR3dSd9JRx6bIFc/ekqHI29JC6pJ5ZEh1yWkhkbcFeSjxgx3L2m1cb1C7bceyxA+CNjT/Ifff+/kDk2u/w/33/IeCMOSaWZ4glosqT3DNnNZQ7Cs58/3Ce5HL78iZH/vKVIaYlqzfdLu8Vi7dnvUbEza5Idt36tquZFldl6N5Z/POLof0XLK61mZCmJSWjVF9tEjUluu74IUXvgttuVIHE7YxSkaYhJZam7yiM9Pv82JYfl9nptxZaxMJE4YSPty+vF0+Y2up9d3wwijfjZbabqm/3bZ9ecKHsiGmRflnn1MW4pjHf9oLufyn2z3y1D6n8g8TZhxyzipLNPnAUpsOiuWimg52psrTZYnOWYNDTMuWBWa0tJb4rgq1UvmutpaYEbZlwU3CLJm/ayYjHW5/h7xWLn9Hh1vepDkyf7dE7MtT5LR4e7yYpHrkhOUpEfssBLq2pPhAqoSWKUkk7EDqkmK6RrCEzqDjhNDWNE+XSMvkJRDWlZTmCW0l0PHQGRZY5t1L83kT0Y3l2SItk5JAWHl2dCOBm+fPu3fo5/3v61RMCO9Jx2EEYYhb0rmNQMX/vm7gqOEJLcXTGw3CAuRNeyaPWwjR8PRqKQ1PDA/dpv+on9Shox52WFnx0KY8onHayrJzm87i5h9xGw/tfkev0jGsQizqezUKjk12hBMKJ4kbCqGPVNXudyyrShovGw5CgxsRICxF6aRmSjlBnHRzg7Gx8fKqEubI2rahQYdR1YgDIRQO7JvQyD52hoIQx0mxa0ODtW2Iozn1le2iIRdzwWewedyZzewidueOGqlsn1MvcnQpuVwLGG3/IR1hIKxCjelIDZ8ldqWz25jWAsnldEnK0Zxro19TGVb2ffIZEsIO89EIEDvKMPrzmBOQcKQ+rroye6NgRRxqR4U8EAkz0CL6uSGOm6KQCdWjvjRiSP1BPalCRS5iQYiEIvxuBMJEWgzSoHADcVMuN7IuqqTeyUPq22qFimFtxDyBBJEwNyt6TM88blFHao/6tWWhuuOM4SAK4EI4QmFHA+SEyWlp4EQoJ13cYGzMu7yszEIBOm2rVmHUNqwAIQabISNMRstmdhNWcFLsSm+0tjJH1MdRxO5Nx0WDMhCtgD6OKgZeljJqJKc9po8juskR9XN0Y1lZ3mWjLR9JCO1jRDMd0fpYC2VnvjBSEFg7wBENc0R9HFlb0xvF1+TBEpF68d+DHR6IOWVv2BECtxo46hOFUBd/APU57WIoEwJhIi2CdpyZX0m93BZicktMj1AS9dClteUFAUNUIEygRZCtik5zSxI9MubTBH1GOiHsiLJ3OCoSZkILa9PxiN0EbvhsAo8tdAf9Seepd36lGWHmtNANTv5Jd0z4QYyeo/UEJqxKRpg5LZx6btLPsOaEmdMyxYdlc8LMaJnikDlhclqmPiQnTEpLUIZEwkRagjYkEibQErwhkTAKCLQEbUgkzJQWc/0PstHHcfEdQ+UAAAAASUVORK5CYII=);\r\n	background-size: 26px 26px;\r\n	}\r\n.leaflet-touch .leaflet-control-layers-toggle {\r\n	width: 44px;\r\n	height: 44px;\r\n	}\r\n.leaflet-control-layers .leaflet-control-layers-list,\r\n.leaflet-control-layers-expanded .leaflet-control-layers-toggle {\r\n	display: none;\r\n	}\r\n.leaflet-control-layers-expanded .leaflet-control-layers-list {\r\n	display: block;\r\n	position: relative;\r\n	}\r\n.leaflet-control-layers-expanded {\r\n	padding: 6px 10px 6px 6px;\r\n	color: #333;\r\n	background: #fff;\r\n	}\r\n.leaflet-control-layers-scrollbar {\r\n	overflow-y: scroll;\r\n	overflow-x: hidden;\r\n	padding-right: 5px;\r\n	}\r\n.leaflet-control-layers-selector {\r\n	margin-top: 2px;\r\n	position: relative;\r\n	top: 1px;\r\n	}\r\n.leaflet-control-layers label {\r\n	display: block;\r\n	font-size: 13px;\r\n	font-size: 1.08333em;\r\n	}\r\n.leaflet-control-layers-separator {\r\n	height: 0;\r\n	border-top: 1px solid #ddd;\r\n	margin: 5px -10px 5px -6px;\r\n	}\r\n\r\n/* Default icon URLs */\r\n.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */\r\n	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAYAAADAk4LOAAAFgUlEQVR4Aa1XA5BjWRTN2oW17d3YaZtr2962HUzbDNpjszW24mRt28p47v7zq/bXZtrp/lWnXr337j3nPCe85NcypgSFdugCpW5YoDAMRaIMqRi6aKq5E3YqDQO3qAwjVWrD8Ncq/RBpykd8oZUb/kaJutow8r1aP9II0WmLKLIsJyv1w/kqw9Ch2MYdB++12Onxee/QMwvf4/Dk/Lfp/i4nxTXtOoQ4pW5Aj7wpici1A9erdAN2OH64x8OSP9j3Ft3b7aWkTg/Fm91siTra0f9on5sQr9INejH6CUUUpavjFNq1B+Oadhxmnfa8RfEmN8VNAsQhPqF55xHkMzz3jSmChWU6f7/XZKNH+9+hBLOHYozuKQPxyMPUKkrX/K0uWnfFaJGS1QPRtZsOPtr3NsW0uyh6NNCOkU3Yz+bXbT3I8G3xE5EXLXtCXbbqwCO9zPQYPRTZ5vIDXD7U+w7rFDEoUUf7ibHIR4y6bLVPXrz8JVZEql13trxwue/uDivd3fkWRbS6/IA2bID4uk0UpF1N8qLlbBlXs4Ee7HLTfV1j54APvODnSfOWBqtKVvjgLKzF5YdEk5ewRkGlK0i33Eofffc7HT56jD7/6U+qH3Cx7SBLNntH5YIPvODnyfIXZYRVDPqgHtLs5ABHD3YzLuespb7t79FY34DjMwrVrcTuwlT55YMPvOBnRrJ4VXTdNnYug5ucHLBjEpt30701A3Ts+HEa73u6dT3FNWwflY86eMHPk+Yu+i6pzUpRrW7SNDg5JHR4KapmM5Wv2E8Tfcb1HoqqHMHU+uWDD7zg54mz5/2BSnizi9T1Dg4QQXLToGNCkb6tb1NU+QAlGr1++eADrzhn/u8Q2YZhQVlZ5+CAOtqfbhmaUCS1ezNFVm2imDbPmPng5wmz+gwh+oHDce0eUtQ6OGDIyR0uUhUsoO3vfDmmgOezH0mZN59x7MBi++WDL1g/eEiU3avlidO671bkLfwbw5XV2P8Pzo0ydy4t2/0eu33xYSOMOD8hTf4CrBtGMSoXfPLchX+J0ruSePw3LZeK0juPJbYzrhkH0io7B3k164hiGvawhOKMLkrQLyVpZg8rHFW7E2uHOL888IBPlNZ1FPzstSJM694fWr6RwpvcJK60+0HCILTBzZLFNdtAzJaohze60T8qBzyh5ZuOg5e7uwQppofEmf2++DYvmySqGBuKaicF1blQjhuHdvCIMvp8whTTfZzI7RldpwtSzL+F1+wkdZ2TBOW2gIF88PBTzD/gpeREAMEbxnJcaJHNHrpzji0gQCS6hdkEeYt9DF/2qPcEC8RM28Hwmr3sdNyht00byAut2k3gufWNtgtOEOFGUwcXWNDbdNbpgBGxEvKkOQsxivJx33iow0Vw5S6SVTrpVq11ysA2Rp7gTfPfktc6zhtXBBC+adRLshf6sG2RfHPZ5EAc4sVZ83yCN00Fk/4kggu40ZTvIEm5g24qtU4KjBrx/BTTH8ifVASAG7gKrnWxJDcU7x8X6Ecczhm3o6YicvsLXWfh3Ch1W0k8x0nXF+0fFxgt4phz8QvypiwCCFKMqXCnqXExjq10beH+UUA7+nG6mdG/Pu0f3LgFcGrl2s0kNNjpmoJ9o4B29CMO8dMT4Q5ox8uitF6fqsrJOr8qnwNbRzv6hSnG5wP+64C7h9lp30hKNtKdWjtdkbuPA19nJ7Tz3zR/ibgARbhb4AlhavcBebmTHcFl2fvYEnW0ox9xMxKBS8btJ+KiEbq9zA4RthQXDhPa0T9TEe69gWupwc6uBUphquXgf+/FrIjweHQS4/pduMe5ERUMHUd9xv8ZR98CxkS4F2n3EUrUZ10EYNw7BWm9x1GiPssi3GgiGRDKWRYZfXlON+dfNbM+GgIwYdwAAAAASUVORK5CYII=);\r\n	}\r\n\r\n\r\n/* attribution and scale controls */\r\n\r\n.leaflet-container .leaflet-control-attribution {\r\n	background: #fff;\r\n	background: rgba(255, 255, 255, 0.8);\r\n	margin: 0;\r\n	}\r\n.leaflet-control-attribution,\r\n.leaflet-control-scale-line {\r\n	padding: 0 5px;\r\n	color: #333;\r\n	line-height: 1.4;\r\n	}\r\n.leaflet-control-attribution a {\r\n	text-decoration: none;\r\n	}\r\n.leaflet-control-attribution a:hover,\r\n.leaflet-control-attribution a:focus {\r\n	text-decoration: underline;\r\n	}\r\n.leaflet-attribution-flag {\r\n	display: inline !important;\r\n	vertical-align: baseline !important;\r\n	width: 1em;\r\n	height: 0.6669em;\r\n	}\r\n.leaflet-left .leaflet-control-scale {\r\n	margin-left: 5px;\r\n	}\r\n.leaflet-bottom .leaflet-control-scale {\r\n	margin-bottom: 5px;\r\n	}\r\n.leaflet-control-scale-line {\r\n	border: 2px solid #777;\r\n	border-top: none;\r\n	line-height: 1.1;\r\n	padding: 2px 5px 1px;\r\n	white-space: nowrap;\r\n	-moz-box-sizing: border-box;\r\n	     box-sizing: border-box;\r\n	background: rgba(255, 255, 255, 0.8);\r\n	text-shadow: 1px 1px #fff;\r\n	}\r\n.leaflet-control-scale-line:not(:first-child) {\r\n	border-top: 2px solid #777;\r\n	border-bottom: none;\r\n	margin-top: -2px;\r\n	}\r\n.leaflet-control-scale-line:not(:first-child):not(:last-child) {\r\n	border-bottom: 2px solid #777;\r\n	}\r\n\r\n.leaflet-touch .leaflet-control-attribution,\r\n.leaflet-touch .leaflet-control-layers,\r\n.leaflet-touch .leaflet-bar {\r\n	box-shadow: none;\r\n	}\r\n.leaflet-touch .leaflet-control-layers,\r\n.leaflet-touch .leaflet-bar {\r\n	border: 2px solid rgba(0,0,0,0.2);\r\n	background-clip: padding-box;\r\n	}\r\n\r\n\r\n/* popup */\r\n\r\n.leaflet-popup {\r\n	position: absolute;\r\n	text-align: center;\r\n	margin-bottom: 20px;\r\n	}\r\n.leaflet-popup-content-wrapper {\r\n	padding: 1px;\r\n	text-align: left;\r\n	border-radius: 12px;\r\n	}\r\n.leaflet-popup-content {\r\n	margin: 13px 24px 13px 20px;\r\n	line-height: 1.3;\r\n	font-size: 13px;\r\n	font-size: 1.08333em;\r\n	min-height: 1px;\r\n	}\r\n.leaflet-popup-content p {\r\n	margin: 17px 0;\r\n	margin: 1.3em 0;\r\n	}\r\n.leaflet-popup-tip-container {\r\n	width: 40px;\r\n	height: 20px;\r\n	position: absolute;\r\n	left: 50%;\r\n	margin-top: -1px;\r\n	margin-left: -20px;\r\n	overflow: hidden;\r\n	pointer-events: none;\r\n	}\r\n.leaflet-popup-tip {\r\n	width: 17px;\r\n	height: 17px;\r\n	padding: 1px;\r\n\r\n	margin: -10px auto 0;\r\n	pointer-events: auto;\r\n\r\n	-webkit-transform: rotate(45deg);\r\n	   -moz-transform: rotate(45deg);\r\n	    -ms-transform: rotate(45deg);\r\n	        transform: rotate(45deg);\r\n	}\r\n.leaflet-popup-content-wrapper,\r\n.leaflet-popup-tip {\r\n	background: white;\r\n	color: #333;\r\n	box-shadow: 0 3px 14px rgba(0,0,0,0.4);\r\n	}\r\n.leaflet-container a.leaflet-popup-close-button {\r\n	position: absolute;\r\n	top: 0;\r\n	right: 0;\r\n	border: none;\r\n	text-align: center;\r\n	width: 24px;\r\n	height: 24px;\r\n	font: 16px/24px Tahoma, Verdana, sans-serif;\r\n	color: #757575;\r\n	text-decoration: none;\r\n	background: transparent;\r\n	}\r\n.leaflet-container a.leaflet-popup-close-button:hover,\r\n.leaflet-container a.leaflet-popup-close-button:focus {\r\n	color: #585858;\r\n	}\r\n.leaflet-popup-scrolled {\r\n	overflow: auto;\r\n	}\r\n\r\n.leaflet-oldie .leaflet-popup-content-wrapper {\r\n	-ms-zoom: 1;\r\n	}\r\n.leaflet-oldie .leaflet-popup-tip {\r\n	width: 24px;\r\n	margin: 0 auto;\r\n\r\n	-ms-filter: \"progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)\";\r\n	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);\r\n	}\r\n\r\n.leaflet-oldie .leaflet-control-zoom,\r\n.leaflet-oldie .leaflet-control-layers,\r\n.leaflet-oldie .leaflet-popup-content-wrapper,\r\n.leaflet-oldie .leaflet-popup-tip {\r\n	border: 1px solid #999;\r\n	}\r\n\r\n\r\n/* div icon */\r\n\r\n.leaflet-div-icon {\r\n	background: #fff;\r\n	border: 1px solid #666;\r\n	}\r\n\r\n\r\n/* Tooltip */\r\n/* Base styles for the element that has a tooltip */\r\n.leaflet-tooltip {\r\n	position: absolute;\r\n	padding: 6px;\r\n	background-color: #fff;\r\n	border: 1px solid #fff;\r\n	border-radius: 3px;\r\n	color: #222;\r\n	white-space: nowrap;\r\n	-webkit-user-select: none;\r\n	-moz-user-select: none;\r\n	-ms-user-select: none;\r\n	user-select: none;\r\n	pointer-events: none;\r\n	box-shadow: 0 1px 3px rgba(0,0,0,0.4);\r\n	}\r\n.leaflet-tooltip.leaflet-interactive {\r\n	cursor: pointer;\r\n	pointer-events: auto;\r\n	}\r\n.leaflet-tooltip-top:before,\r\n.leaflet-tooltip-bottom:before,\r\n.leaflet-tooltip-left:before,\r\n.leaflet-tooltip-right:before {\r\n	position: absolute;\r\n	pointer-events: none;\r\n	border: 6px solid transparent;\r\n	background: transparent;\r\n	content: \"\";\r\n	}\r\n\r\n/* Directions */\r\n\r\n.leaflet-tooltip-bottom {\r\n	margin-top: 6px;\r\n}\r\n.leaflet-tooltip-top {\r\n	margin-top: -6px;\r\n}\r\n.leaflet-tooltip-bottom:before,\r\n.leaflet-tooltip-top:before {\r\n	left: 50%;\r\n	margin-left: -6px;\r\n	}\r\n.leaflet-tooltip-top:before {\r\n	bottom: 0;\r\n	margin-bottom: -12px;\r\n	border-top-color: #fff;\r\n	}\r\n.leaflet-tooltip-bottom:before {\r\n	top: 0;\r\n	margin-top: -12px;\r\n	margin-left: -6px;\r\n	border-bottom-color: #fff;\r\n	}\r\n.leaflet-tooltip-left {\r\n	margin-left: -6px;\r\n}\r\n.leaflet-tooltip-right {\r\n	margin-left: 6px;\r\n}\r\n.leaflet-tooltip-left:before,\r\n.leaflet-tooltip-right:before {\r\n	top: 50%;\r\n	margin-top: -6px;\r\n	}\r\n.leaflet-tooltip-left:before {\r\n	right: 0;\r\n	margin-right: -12px;\r\n	border-left-color: #fff;\r\n	}\r\n.leaflet-tooltip-right:before {\r\n	left: 0;\r\n	margin-left: -12px;\r\n	border-right-color: #fff;\r\n	}\r\n\r\n/* Printing */\r\n\r\n@media print {\r\n	/* Prevent printers from removing background-images of controls. */\r\n	.leaflet-control {\r\n		-webkit-print-color-adjust: exact;\r\n		print-color-adjust: exact;\r\n		}\r\n	}\r\n";
+	//#endregion
+	//#region src/panel-view.js
+	function renderPanel(panel) {
+		if (!panel.shadowRoot) return;
+		panel.destroyLeafletMaps();
+		const vehicles = [.../* @__PURE__ */ new Set([...panel.vehicles, ...panel.trips.map((trip) => trip.vehicle).filter(Boolean)])].sort();
+		panel.shadowRoot.innerHTML = renderShellFromHtml(panel, `
+      <style>
+        ${leaflet_default}
+        :host { display: block; height: 100%; color: var(--primary-text-color); }
+        .panel-content { min-height: 100%; }
+        main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
+        .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
+        .filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
+        input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
+        input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+        .filters ha-button { align-self: end; }
+        .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+        ha-card { overflow: hidden; }
+        .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
+        .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
+        .trip-map-canvas { display: block; width: 100%; height: 100%; }
+        .trip-details { display: flex; flex-direction: column; padding: 16px; }
+        .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+        .trip-head { align-items: flex-start; flex-wrap: wrap; }
+        .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
+        .trip-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--primary-color); border-radius: 999px; color: var(--primary-text-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
+        .trip-status::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--primary-color); }
+        .route { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-rows: auto minmax(14px, auto) auto; column-gap: 9px; margin-top: 14px; }
+        .route > .dot { grid-column: 1; justify-self: center; align-self: center; z-index: 1; }
+        .route > .address { grid-column: 2; }
+        .route > .dot:first-child, .route > .address:nth-child(2) { grid-row: 1; }
+        .route > .connector { grid-column: 1; grid-row: 2; justify-self: center; width: 1px; margin-block: -4px; background: var(--divider-color); }
+        .route > .dot.stop, .route > .address:last-child { grid-row: 3; }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary-color); }
+        .dot.stop { background: var(--accent-color); }
+        .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
+        .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
+        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
+        .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
+        .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
+        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
+      </style>
+      <main>
+                <h1 class="visually-hidden">${panel.t("trips")}</h1>
+                <div class="summary"><span class="trip-count">${panel.filteredTrips.length} ${panel.filteredTrips.length === 1 ? panel.t("trip") : panel.t("tripsPlural")}</span></div>
+        <form class="filters">
+                    <label>${panel.t("from")} <input id="from" type="date"></label>
+                    <label>${panel.t("to")} <input id="to" type="date"></label>
+                    <label>${panel.t("vehicle")} <select id="vehicle"><option value="">${panel.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${panel.escape(vehicle)}">${panel.escape(vehicle)}</option>`).join("")}</select></label>
+                    <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
+        </form>
+                <div class="trips-grid">${panel.renderTrips()}</div>
+      </main>`);
+		const fromField = panel.shadowRoot.querySelector("#from");
+		const toField = panel.shadowRoot.querySelector("#to");
+		const vehicleField = panel.shadowRoot.querySelector("#vehicle");
+		if (fromField) fromField.value = panel.filters.from;
+		if (toField) toField.value = panel.filters.to;
+		if (vehicleField) vehicleField.value = panel.filters.vehicle;
+		panel.bindEvents();
+	}
+	function renderTrips(panel, startIndex = 0) {
+		if (!panel.filteredTrips.length) return `<div class="empty">${panel.escape(panel.t("noTrips"))}</div>`;
+		return panel.filteredTrips.slice(startIndex).map((trip, index) => `
+                    <ha-card class="trip">
+                        <div class="trip-map">${panel.renderMap(index + startIndex)}</div>
+                        <div class="trip-details">${panel.renderTripDetails(trip)}
+                        </div>
+                    </ha-card>`).join("");
+	}
+	function renderTripDetails(panel, trip) {
+		return `
+            <div class="trip-head"><span class="vehicle">${panel.escape(trip.vehicle || panel.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${panel.escape(panel.t("trip"))} &middot; ${panel.escape(panel.t("ongoing"))}</span>` : ""}</div>
+            <div class="route">
+                <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
+                <i class="connector"></i>
+                <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
+            </div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
+                `;
+	}
+	function renderMap(index) {
+		return `<div class="trip-map-canvas" data-index="${index}"></div>`;
+	}
+	function renderShellFromHtml(panel, content) {
+		const menuLabel = panel._hass?.localize?.("ui.sidebar.sidebar_toggle") || "Menu";
+		return `<ha-top-app-bar-fixed has-scrolling-content ${panel.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon" aria-label="${panel.escape(menuLabel)}"></ha-menu-button><span slot="title">${panel.escape(panel.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
+	}
+	function renderError(panel, message) {
+		panel.filteredTrips = [];
+		panel.destroyLeafletMaps();
+		if (panel.shadowRoot) panel.shadowRoot.innerHTML = renderShellFromHtml(panel, `<main><ha-card><div class="empty">${panel.escape(message)}</div></ha-card></main>`);
+	}
+	function escapeHtml(value) {
+		return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+			"&": "&amp;",
+			"<": "&lt;",
+			">": "&gt;",
+			"\"": "&quot;",
+			"'": "&#039;"
+		})[character]);
+	}
+	//#endregion
+	//#region src/translations.js
+	var TRANSLATIONS = {
+		en: {
+			trips: "Trips",
+			trip: "Trip",
+			tripsPlural: "Trips",
+			from: "From",
+			to: "To",
+			vehicle: "Vehicle",
+			allVehicles: "All vehicles",
+			reset: "Reset",
+			noTrips: "No trips match these criteria.",
+			loadingTrips: "Unable to load trips.",
+			ongoing: "Ongoing",
+			gpsPosition: "GPS position recorded",
+			start: "Departure",
+			arrival: "Arrival"
+		},
+		fr: {
+			trips: "Trajets",
+			trip: "Trajet",
+			tripsPlural: "Trajets",
+			from: "Du",
+			to: "Au",
+			vehicle: "Véhicule",
+			allVehicles: "Tous les véhicules",
+			reset: "Réinitialiser",
+			noTrips: "Aucun trajet pour ces critères.",
+			loadingTrips: "Impossible de charger les trajets.",
+			ongoing: "En cours",
+			gpsPosition: "Position GPS enregistrée",
+			start: "Départ",
+			arrival: "Arrivée"
+		},
+		de: {
+			trips: "Fahrten",
+			trip: "Fahrt",
+			tripsPlural: "Fahrten",
+			from: "Von",
+			to: "Bis",
+			vehicle: "Fahrzeug",
+			allVehicles: "Alle Fahrzeuge",
+			reset: "Zurücksetzen",
+			noTrips: "Keine Fahrten für diese Kriterien.",
+			loadingTrips: "Fahrten konnten nicht geladen werden.",
+			ongoing: "Läuft",
+			gpsPosition: "GPS-Position aufgezeichnet",
+			start: "Abfahrt",
+			arrival: "Ankunft"
+		},
+		es: {
+			trips: "Viajes",
+			trip: "Viaje",
+			tripsPlural: "Viajes",
+			from: "Desde",
+			to: "Hasta",
+			vehicle: "Vehículo",
+			allVehicles: "Todos los vehículos",
+			reset: "Restablecer",
+			noTrips: "No hay viajes para estos criterios.",
+			loadingTrips: "No se han podido cargar los viajes.",
+			ongoing: "En curso",
+			gpsPosition: "Posición GPS registrada",
+			start: "Salida",
+			arrival: "Llegada"
+		},
+		it: {
+			trips: "Viaggi",
+			trip: "Viaggio",
+			tripsPlural: "Viaggi",
+			from: "Da",
+			to: "A",
+			vehicle: "Veicolo",
+			allVehicles: "Tutti i veicoli",
+			reset: "Reimposta",
+			noTrips: "Nessun viaggio per questi criteri.",
+			loadingTrips: "Impossibile caricare i viaggi.",
+			ongoing: "In corso",
+			gpsPosition: "Posizione GPS registrata",
+			start: "Partenza",
+			arrival: "Arrivo"
+		},
+		nl: {
+			trips: "Ritten",
+			trip: "Rit",
+			tripsPlural: "Ritten",
+			from: "Van",
+			to: "Tot",
+			vehicle: "Voertuig",
+			allVehicles: "Alle voertuigen",
+			reset: "Resetten",
+			noTrips: "Geen ritten voor deze criteria.",
+			loadingTrips: "Ritten konden niet worden geladen.",
+			ongoing: "Bezig",
+			gpsPosition: "GPS-positie geregistreerd",
+			start: "Vertrek",
+			arrival: "Aankomst"
+		},
+		pt: {
+			trips: "Viagens",
+			trip: "Viagem",
+			tripsPlural: "Viagens",
+			from: "De",
+			to: "Até",
+			vehicle: "Veículo",
+			allVehicles: "Todos os veículos",
+			reset: "Repor",
+			noTrips: "Não existem viagens para estes critérios.",
+			loadingTrips: "Não foi possível carregar as viagens.",
+			ongoing: "Em curso",
+			gpsPosition: "Posição GPS registada",
+			start: "Partida",
+			arrival: "Chegada"
+		},
+		"pt-BR": {
+			trips: "Viagens",
+			trip: "Viagem",
+			tripsPlural: "Viagens",
+			from: "De",
+			to: "Até",
+			vehicle: "Veículo",
+			allVehicles: "Todos os veículos",
+			reset: "Redefinir",
+			noTrips: "Nenhuma viagem corresponde a estes critérios.",
+			loadingTrips: "Não foi possível carregar as viagens.",
+			ongoing: "Em andamento",
+			gpsPosition: "Posição GPS registrada",
+			start: "Partida",
+			arrival: "Chegada"
+		},
+		pl: {
+			trips: "Przejazdy",
+			trip: "Przejazd",
+			tripsPlural: "Przejazdy",
+			from: "Od",
+			to: "Do",
+			vehicle: "Pojazd",
+			allVehicles: "Wszystkie pojazdy",
+			reset: "Resetuj",
+			noTrips: "Brak przejazdów dla tych kryteriów.",
+			loadingTrips: "Nie można załadować przejazdów.",
+			ongoing: "W toku",
+			gpsPosition: "Zarejestrowana pozycja GPS",
+			start: "Odjazd",
+			arrival: "Przyjazd"
+		},
+		ru: {
+			trips: "Поездки",
+			trip: "Поездка",
+			tripsPlural: "Поездки",
+			from: "С",
+			to: "По",
+			vehicle: "Автомобиль",
+			allVehicles: "Все автомобили",
+			reset: "Сбросить",
+			noTrips: "Нет поездок по этим критериям.",
+			loadingTrips: "Не удалось загрузить поездки.",
+			ongoing: "В процессе",
+			gpsPosition: "Позиция GPS записана",
+			start: "Отправление",
+			arrival: "Прибытие"
+		},
+		sv: {
+			trips: "Resor",
+			trip: "Resa",
+			tripsPlural: "Resor",
+			from: "Från",
+			to: "Till",
+			vehicle: "Fordon",
+			allVehicles: "Alla fordon",
+			reset: "Återställ",
+			noTrips: "Inga resor matchar dessa kriterier.",
+			loadingTrips: "Det gick inte att läsa in resor.",
+			ongoing: "Pågår",
+			gpsPosition: "GPS-position registrerad",
+			start: "Avfärd",
+			arrival: "Ankomst"
+		},
+		da: {
+			trips: "Ture",
+			trip: "Tur",
+			tripsPlural: "Ture",
+			from: "Fra",
+			to: "Til",
+			vehicle: "Køretøj",
+			allVehicles: "Alle køretøjer",
+			reset: "Nulstil",
+			noTrips: "Ingen ture matcher disse kriterier.",
+			loadingTrips: "Ture kunne ikke indlæses.",
+			ongoing: "I gang",
+			gpsPosition: "GPS-position registreret",
+			start: "Afgang",
+			arrival: "Ankomst"
+		},
+		no: {
+			trips: "Turer",
+			trip: "Tur",
+			tripsPlural: "Turer",
+			from: "Fra",
+			to: "Til",
+			vehicle: "Kjøretøy",
+			allVehicles: "Alle kjøretøy",
+			reset: "Tilbakestill",
+			noTrips: "Ingen turer samsvarer med disse kriteriene.",
+			loadingTrips: "Kunne ikke laste inn turer.",
+			ongoing: "Pågår",
+			gpsPosition: "GPS-posisjon registrert",
+			start: "Avreise",
+			arrival: "Ankomst"
+		},
+		fi: {
+			trips: "Matkat",
+			trip: "Matka",
+			tripsPlural: "Matkat",
+			from: "Alkaen",
+			to: "Asti",
+			vehicle: "Ajoneuvo",
+			allVehicles: "Kaikki ajoneuvot",
+			reset: "Nollaa",
+			noTrips: "Näillä ehdoilla ei löytynyt matkoja.",
+			loadingTrips: "Matkoja ei voitu ladata.",
+			ongoing: "Käynnissä",
+			gpsPosition: "GPS-sijainti tallennettu",
+			start: "Lähtö",
+			arrival: "Saapuminen"
+		},
+		cs: {
+			trips: "Cesty",
+			trip: "Cesta",
+			tripsPlural: "Cesty",
+			from: "Od",
+			to: "Do",
+			vehicle: "Vozidlo",
+			allVehicles: "Všechna vozidla",
+			reset: "Resetovat",
+			noTrips: "Žádné cesty neodpovídají kritériím.",
+			loadingTrips: "Cesty se nepodařilo načíst.",
+			ongoing: "Probíhá",
+			gpsPosition: "Pozice GPS zaznamenána",
+			start: "Odjezd",
+			arrival: "Příjezd"
+		},
+		tr: {
+			trips: "Sürüşler",
+			trip: "Sürüş",
+			tripsPlural: "Sürüşler",
+			from: "Başlangıç",
+			to: "Bitiş",
+			vehicle: "Araç",
+			allVehicles: "Tüm araçlar",
+			reset: "Sıfırla",
+			noTrips: "Bu ölçütlere uyan sürüş yok.",
+			loadingTrips: "Sürüşler yüklenemedi.",
+			ongoing: "Devam ediyor",
+			gpsPosition: "GPS konumu kaydedildi",
+			start: "Kalkış",
+			arrival: "Varış"
+		},
+		uk: {
+			trips: "Поїздки",
+			trip: "Поїздка",
+			tripsPlural: "Поїздки",
+			from: "Від",
+			to: "До",
+			vehicle: "Автомобіль",
+			allVehicles: "Усі автомобілі",
+			reset: "Скинути",
+			noTrips: "Поїздок за цими критеріями немає.",
+			loadingTrips: "Не вдалося завантажити поїздки.",
+			ongoing: "Триває",
+			gpsPosition: "Позицію GPS записано",
+			start: "Відправлення",
+			arrival: "Прибуття"
+		},
+		ja: {
+			trips: "走行履歴",
+			trip: "走行",
+			tripsPlural: "走行履歴",
+			from: "開始日",
+			to: "終了日",
+			vehicle: "車両",
+			allVehicles: "すべての車両",
+			reset: "リセット",
+			noTrips: "条件に一致する走行はありません。",
+			loadingTrips: "走行履歴を読み込めませんでした。",
+			ongoing: "進行中",
+			gpsPosition: "GPS位置を記録しました",
+			start: "出発",
+			arrival: "到着"
+		},
+		"zh-Hans": {
+			trips: "行程",
+			trip: "行程",
+			tripsPlural: "行程",
+			from: "开始",
+			to: "结束",
+			vehicle: "车辆",
+			allVehicles: "所有车辆",
+			reset: "重置",
+			noTrips: "没有符合这些条件的行程。",
+			loadingTrips: "无法加载行程。",
+			ongoing: "进行中",
+			gpsPosition: "已记录 GPS 位置",
+			start: "出发",
+			arrival: "到达"
+		},
+		"zh-Hant": {
+			trips: "行程",
+			trip: "行程",
+			tripsPlural: "行程",
+			from: "開始",
+			to: "結束",
+			vehicle: "車輛",
+			allVehicles: "所有車輛",
+			reset: "重設",
+			noTrips: "沒有符合這些條件的行程。",
+			loadingTrips: "無法載入行程。",
+			ongoing: "進行中",
+			gpsPosition: "已記錄 GPS 位置",
+			start: "出發",
+			arrival: "抵達"
+		},
+		ko: {
+			trips: "주행 기록",
+			trip: "주행",
+			tripsPlural: "주행 기록",
+			from: "시작",
+			to: "종료",
+			vehicle: "차량",
+			allVehicles: "모든 차량",
+			reset: "초기화",
+			noTrips: "조건에 맞는 주행이 없습니다.",
+			loadingTrips: "주행 기록을 불러올 수 없습니다.",
+			ongoing: "진행 중",
+			gpsPosition: "GPS 위치가 기록되었습니다",
+			start: "출발",
+			arrival: "도착"
+		}
+	};
 	//#endregion
 	//#region node_modules/leaflet/dist/leaflet-src.js
 	var require_leaflet_src = /* @__PURE__ */ __commonJSMin(((exports, module) => {
@@ -6783,362 +7249,7 @@
 		return leafletModulePromise;
 	}
 	var PANEL_API = "/api/ovms_trips_recorder/trips";
-	var VERSION_STORAGE_KEY = "ovms_trips_recorder_frontend_version";
 	var TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
-	var TRANSLATIONS = {
-		en: {
-			trips: "Trips",
-			trip: "Trip",
-			tripsPlural: "Trips",
-			from: "From",
-			to: "To",
-			vehicle: "Vehicle",
-			allVehicles: "All vehicles",
-			reset: "Reset",
-			noTrips: "No trips match these criteria.",
-			loadingTrips: "Unable to load trips.",
-			ongoing: "Ongoing",
-			gpsPosition: "GPS position recorded",
-			start: "Departure",
-			arrival: "Arrival"
-		},
-		fr: {
-			trips: "Trajets",
-			trip: "Trajet",
-			tripsPlural: "Trajets",
-			from: "Du",
-			to: "Au",
-			vehicle: "Véhicule",
-			allVehicles: "Tous les véhicules",
-			reset: "Réinitialiser",
-			noTrips: "Aucun trajet pour ces critères.",
-			loadingTrips: "Impossible de charger les trajets.",
-			ongoing: "En cours",
-			gpsPosition: "Position GPS enregistrée",
-			start: "Départ",
-			arrival: "Arrivée"
-		},
-		de: {
-			trips: "Fahrten",
-			trip: "Fahrt",
-			tripsPlural: "Fahrten",
-			from: "Von",
-			to: "Bis",
-			vehicle: "Fahrzeug",
-			allVehicles: "Alle Fahrzeuge",
-			reset: "Zurücksetzen",
-			noTrips: "Keine Fahrten für diese Kriterien.",
-			loadingTrips: "Fahrten konnten nicht geladen werden.",
-			ongoing: "Läuft",
-			gpsPosition: "GPS-Position aufgezeichnet",
-			start: "Abfahrt",
-			arrival: "Ankunft"
-		},
-		es: {
-			trips: "Viajes",
-			trip: "Viaje",
-			tripsPlural: "Viajes",
-			from: "Desde",
-			to: "Hasta",
-			vehicle: "Vehículo",
-			allVehicles: "Todos los vehículos",
-			reset: "Restablecer",
-			noTrips: "No hay viajes para estos criterios.",
-			loadingTrips: "No se han podido cargar los viajes.",
-			ongoing: "En curso",
-			gpsPosition: "Posición GPS registrada",
-			start: "Salida",
-			arrival: "Llegada"
-		},
-		it: {
-			trips: "Viaggi",
-			trip: "Viaggio",
-			tripsPlural: "Viaggi",
-			from: "Da",
-			to: "A",
-			vehicle: "Veicolo",
-			allVehicles: "Tutti i veicoli",
-			reset: "Reimposta",
-			noTrips: "Nessun viaggio per questi criteri.",
-			loadingTrips: "Impossibile caricare i viaggi.",
-			ongoing: "In corso",
-			gpsPosition: "Posizione GPS registrata",
-			start: "Partenza",
-			arrival: "Arrivo"
-		},
-		nl: {
-			trips: "Ritten",
-			trip: "Rit",
-			tripsPlural: "Ritten",
-			from: "Van",
-			to: "Tot",
-			vehicle: "Voertuig",
-			allVehicles: "Alle voertuigen",
-			reset: "Resetten",
-			noTrips: "Geen ritten voor deze criteria.",
-			loadingTrips: "Ritten konden niet worden geladen.",
-			ongoing: "Bezig",
-			gpsPosition: "GPS-positie geregistreerd",
-			start: "Vertrek",
-			arrival: "Aankomst"
-		},
-		pt: {
-			trips: "Viagens",
-			trip: "Viagem",
-			tripsPlural: "Viagens",
-			from: "De",
-			to: "Até",
-			vehicle: "Veículo",
-			allVehicles: "Todos os veículos",
-			reset: "Repor",
-			noTrips: "Não existem viagens para estes critérios.",
-			loadingTrips: "Não foi possível carregar as viagens.",
-			ongoing: "Em curso",
-			gpsPosition: "Posição GPS registada",
-			start: "Partida",
-			arrival: "Chegada"
-		},
-		"pt-BR": {
-			trips: "Viagens",
-			trip: "Viagem",
-			tripsPlural: "Viagens",
-			from: "De",
-			to: "Até",
-			vehicle: "Veículo",
-			allVehicles: "Todos os veículos",
-			reset: "Redefinir",
-			noTrips: "Nenhuma viagem corresponde a estes critérios.",
-			loadingTrips: "Não foi possível carregar as viagens.",
-			ongoing: "Em andamento",
-			gpsPosition: "Posição GPS registrada",
-			start: "Partida",
-			arrival: "Chegada"
-		},
-		pl: {
-			trips: "Przejazdy",
-			trip: "Przejazd",
-			tripsPlural: "Przejazdy",
-			from: "Od",
-			to: "Do",
-			vehicle: "Pojazd",
-			allVehicles: "Wszystkie pojazdy",
-			reset: "Resetuj",
-			noTrips: "Brak przejazdów dla tych kryteriów.",
-			loadingTrips: "Nie można załadować przejazdów.",
-			ongoing: "W toku",
-			gpsPosition: "Zarejestrowana pozycja GPS",
-			start: "Odjazd",
-			arrival: "Przyjazd"
-		},
-		ru: {
-			trips: "Поездки",
-			trip: "Поездка",
-			tripsPlural: "Поездки",
-			from: "С",
-			to: "По",
-			vehicle: "Автомобиль",
-			allVehicles: "Все автомобили",
-			reset: "Сбросить",
-			noTrips: "Нет поездок по этим критериям.",
-			loadingTrips: "Не удалось загрузить поездки.",
-			ongoing: "В процессе",
-			gpsPosition: "Позиция GPS записана",
-			start: "Отправление",
-			arrival: "Прибытие"
-		},
-		sv: {
-			trips: "Resor",
-			trip: "Resa",
-			tripsPlural: "Resor",
-			from: "Från",
-			to: "Till",
-			vehicle: "Fordon",
-			allVehicles: "Alla fordon",
-			reset: "Återställ",
-			noTrips: "Inga resor matchar dessa kriterier.",
-			loadingTrips: "Det gick inte att läsa in resor.",
-			ongoing: "Pågår",
-			gpsPosition: "GPS-position registrerad",
-			start: "Avfärd",
-			arrival: "Ankomst"
-		},
-		da: {
-			trips: "Ture",
-			trip: "Tur",
-			tripsPlural: "Ture",
-			from: "Fra",
-			to: "Til",
-			vehicle: "Køretøj",
-			allVehicles: "Alle køretøjer",
-			reset: "Nulstil",
-			noTrips: "Ingen ture matcher disse kriterier.",
-			loadingTrips: "Ture kunne ikke indlæses.",
-			ongoing: "I gang",
-			gpsPosition: "GPS-position registreret",
-			start: "Afgang",
-			arrival: "Ankomst"
-		},
-		no: {
-			trips: "Turer",
-			trip: "Tur",
-			tripsPlural: "Turer",
-			from: "Fra",
-			to: "Til",
-			vehicle: "Kjøretøy",
-			allVehicles: "Alle kjøretøy",
-			reset: "Tilbakestill",
-			noTrips: "Ingen turer samsvarer med disse kriteriene.",
-			loadingTrips: "Kunne ikke laste inn turer.",
-			ongoing: "Pågår",
-			gpsPosition: "GPS-posisjon registrert",
-			start: "Avreise",
-			arrival: "Ankomst"
-		},
-		fi: {
-			trips: "Matkat",
-			trip: "Matka",
-			tripsPlural: "Matkat",
-			from: "Alkaen",
-			to: "Asti",
-			vehicle: "Ajoneuvo",
-			allVehicles: "Kaikki ajoneuvot",
-			reset: "Nollaa",
-			noTrips: "Näillä ehdoilla ei löytynyt matkoja.",
-			loadingTrips: "Matkoja ei voitu ladata.",
-			ongoing: "Käynnissä",
-			gpsPosition: "GPS-sijainti tallennettu",
-			start: "Lähtö",
-			arrival: "Saapuminen"
-		},
-		cs: {
-			trips: "Cesty",
-			trip: "Cesta",
-			tripsPlural: "Cesty",
-			from: "Od",
-			to: "Do",
-			vehicle: "Vozidlo",
-			allVehicles: "Všechna vozidla",
-			reset: "Resetovat",
-			noTrips: "Žádné cesty neodpovídají kritériím.",
-			loadingTrips: "Cesty se nepodařilo načíst.",
-			ongoing: "Probíhá",
-			gpsPosition: "Pozice GPS zaznamenána",
-			start: "Odjezd",
-			arrival: "Příjezd"
-		},
-		tr: {
-			trips: "Sürüşler",
-			trip: "Sürüş",
-			tripsPlural: "Sürüşler",
-			from: "Başlangıç",
-			to: "Bitiş",
-			vehicle: "Araç",
-			allVehicles: "Tüm araçlar",
-			reset: "Sıfırla",
-			noTrips: "Bu ölçütlere uyan sürüş yok.",
-			loadingTrips: "Sürüşler yüklenemedi.",
-			ongoing: "Devam ediyor",
-			gpsPosition: "GPS konumu kaydedildi",
-			start: "Kalkış",
-			arrival: "Varış"
-		},
-		uk: {
-			trips: "Поїздки",
-			trip: "Поїздка",
-			tripsPlural: "Поїздки",
-			from: "Від",
-			to: "До",
-			vehicle: "Автомобіль",
-			allVehicles: "Усі автомобілі",
-			reset: "Скинути",
-			noTrips: "Поїздок за цими критеріями немає.",
-			loadingTrips: "Не вдалося завантажити поїздки.",
-			ongoing: "Триває",
-			gpsPosition: "Позицію GPS записано",
-			start: "Відправлення",
-			arrival: "Прибуття"
-		},
-		ja: {
-			trips: "走行履歴",
-			trip: "走行",
-			tripsPlural: "走行履歴",
-			from: "開始日",
-			to: "終了日",
-			vehicle: "車両",
-			allVehicles: "すべての車両",
-			reset: "リセット",
-			noTrips: "条件に一致する走行はありません。",
-			loadingTrips: "走行履歴を読み込めませんでした。",
-			ongoing: "進行中",
-			gpsPosition: "GPS位置を記録しました",
-			start: "出発",
-			arrival: "到着"
-		},
-		"zh-Hans": {
-			trips: "行程",
-			trip: "行程",
-			tripsPlural: "行程",
-			from: "开始",
-			to: "结束",
-			vehicle: "车辆",
-			allVehicles: "所有车辆",
-			reset: "重置",
-			noTrips: "没有符合这些条件的行程。",
-			loadingTrips: "无法加载行程。",
-			ongoing: "进行中",
-			gpsPosition: "已记录 GPS 位置",
-			start: "出发",
-			arrival: "到达"
-		},
-		"zh-Hant": {
-			trips: "行程",
-			trip: "行程",
-			tripsPlural: "行程",
-			from: "開始",
-			to: "結束",
-			vehicle: "車輛",
-			allVehicles: "所有車輛",
-			reset: "重設",
-			noTrips: "沒有符合這些條件的行程。",
-			loadingTrips: "無法載入行程。",
-			ongoing: "進行中",
-			gpsPosition: "已記錄 GPS 位置",
-			start: "出發",
-			arrival: "抵達"
-		},
-		ko: {
-			trips: "주행 기록",
-			trip: "주행",
-			tripsPlural: "주행 기록",
-			from: "시작",
-			to: "종료",
-			vehicle: "차량",
-			allVehicles: "모든 차량",
-			reset: "초기화",
-			noTrips: "조건에 맞는 주행이 없습니다.",
-			loadingTrips: "주행 기록을 불러올 수 없습니다.",
-			ongoing: "진행 중",
-			gpsPosition: "GPS 위치가 기록되었습니다",
-			start: "출발",
-			arrival: "도착"
-		}
-	};
-	async function checkFrontendVersion(version) {
-		if (!version) return false;
-		try {
-			const known = window.localStorage.getItem(VERSION_STORAGE_KEY);
-			window.localStorage.setItem(VERSION_STORAGE_KEY, version);
-			if (known === null || known === version) return false;
-			if (window.caches) {
-				const keys = await window.caches.keys();
-				await Promise.all(keys.map((key) => window.caches.delete(key)));
-			}
-			window.location.reload();
-			return true;
-		} catch (error) {
-			return false;
-		}
-	}
 	var TripsRecorderPanel = class extends HTMLElement {
 		constructor() {
 			super();
@@ -7303,91 +7414,16 @@
 			].map((field) => trip[field]).filter((value) => value && value !== "-1").join(", ") || this.t("gpsPosition");
 		}
 		render() {
-			if (!this.shadowRoot) return;
-			this.destroyLeafletMaps();
-			const vehicles = [.../* @__PURE__ */ new Set([...this.vehicles, ...this.trips.map((trip) => trip.vehicle).filter(Boolean)])].sort();
-			this.shadowRoot.innerHTML = this.renderShellFromHtml(`
-      <style>
-        ${leaflet_default}
-        :host { display: block; height: 100%; color: var(--primary-text-color); }
-        .panel-content { min-height: 100%; }
-        main { box-sizing: border-box; padding: var(--ha-space-4, 24px); max-width: 1440px; margin: auto; }
-        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-        .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
-        .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
-        .filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
-        label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
-        input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
-        input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
-        .filters ha-button { align-self: end; }
-        .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-        ha-card { overflow: hidden; }
-        .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
-        .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
-        .trip-map-canvas { display: block; width: 100%; height: 100%; }
-        .trip-details { display: flex; flex-direction: column; padding: 16px; }
-        .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .trip-head { align-items: flex-start; flex-wrap: wrap; }
-        .vehicle { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
-        .trip-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--primary-color); border-radius: 999px; color: var(--primary-text-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 500; }
-        .trip-status::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--primary-color); }
-        .route { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-rows: auto minmax(14px, auto) auto; column-gap: 9px; margin-top: 14px; }
-        .route > .dot { grid-column: 1; justify-self: center; align-self: center; z-index: 1; }
-        .route > .address { grid-column: 2; }
-        .route > .dot:first-child, .route > .address:nth-child(2) { grid-row: 1; }
-        .route > .connector { grid-column: 1; grid-row: 2; justify-self: center; width: 1px; margin-block: -4px; background: var(--divider-color); }
-        .route > .dot.stop, .route > .address:last-child { grid-row: 3; }
-        .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary-color); }
-        .dot.stop { background: var(--accent-color); }
-        .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
-        .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
-        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
-        .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
-        .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
-        @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
-      </style>
-      <main>
-                <h1 class="visually-hidden">${this.t("trips")}</h1>
-                <div class="summary"><span class="trip-count">${this.filteredTrips.length} ${this.filteredTrips.length === 1 ? this.t("trip") : this.t("tripsPlural")}</span></div>
-        <form class="filters">
-                    <label>${this.t("from")} <input id="from" type="date"></label>
-                    <label>${this.t("to")} <input id="to" type="date"></label>
-                    <label>${this.t("vehicle")} <select id="vehicle"><option value="">${this.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${this.escape(vehicle)}">${this.escape(vehicle)}</option>`).join("")}</select></label>
-                    <ha-button id="reset" appearance="outlined">${this.t("reset")}</ha-button>
-        </form>
-                <div class="trips-grid">${this.renderTrips()}</div>
-      </main>`);
-			const fromField = this.shadowRoot.querySelector("#from");
-			const toField = this.shadowRoot.querySelector("#to");
-			const vehicleField = this.shadowRoot.querySelector("#vehicle");
-			if (fromField) fromField.value = this.filters.from;
-			if (toField) toField.value = this.filters.to;
-			if (vehicleField) vehicleField.value = this.filters.vehicle;
-			this.bindEvents();
+			renderPanel(this);
 		}
-		renderTrips() {
-			if (!this.filteredTrips.length) return `<div class="empty">${this.escape(this.t("noTrips"))}</div>`;
-			return this.filteredTrips.map((trip, index) => `
-                    <ha-card class="trip">
-                        <div class="trip-map">${this.renderMap(index)}</div>
-                        <div class="trip-details">${this.renderTripDetails(trip)}
-                        </div>
-                    </ha-card>`).join("");
+		renderTrips(startIndex = 0) {
+			return renderTrips(this, startIndex);
 		}
 		renderTripDetails(trip) {
-			return `
-            <div class="trip-head"><span class="vehicle">${this.escape(trip.vehicle || this.t("vehicle"))}</span>${!trip.stop_time ? `<span class="trip-status">${this.escape(this.t("trip"))} &middot; ${this.escape(this.t("ongoing"))}</span>` : ""}</div>
-            <div class="route">
-                <i class="dot"></i><div class="address"><strong>${this.escape(this.formatDate(trip.start_time))}</strong><span>${this.escape(this.formatAddress(trip, "start"))}</span></div>
-                <i class="connector"></i>
-                <i class="dot stop"></i><div class="address"><strong>${this.escape(this.formatDate(trip.stop_time))}</strong><span>${this.escape(this.formatAddress(trip, "stop"))}</span></div>
-            </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
-                `;
+			return renderTripDetails(this, trip);
 		}
 		renderMap(index) {
-			return `<div class="trip-map-canvas" data-index="${index}"></div>`;
+			return renderMap(index);
 		}
 		bindEvents() {
 			this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => this.applyFilters());
@@ -7489,22 +7525,13 @@
 			this.maps = /* @__PURE__ */ new Map();
 		}
 		renderShellFromHtml(content) {
-			const menuLabel = this._hass?.localize?.("ui.sidebar.sidebar_toggle") || "Menu";
-			return `<ha-top-app-bar-fixed has-scrolling-content ${this.narrow ? "narrow" : ""}><ha-menu-button slot="navigationIcon" aria-label="${this.escape(menuLabel)}"></ha-menu-button><span slot="title">${this.escape(this.t("trips"))}</span><div class="panel-content">${content}</div></ha-top-app-bar-fixed>`;
+			return renderShellFromHtml(this, content);
 		}
 		renderError(message) {
-			this.filteredTrips = [];
-			this.destroyLeafletMaps();
-			if (this.shadowRoot) this.shadowRoot.innerHTML = this.renderShellFromHtml(`<main><ha-card><div class="empty">${this.escape(message)}</div></ha-card></main>`);
+			renderError(this, message);
 		}
 		escape(value) {
-			return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-				"&": "&amp;",
-				"<": "&lt;",
-				">": "&gt;",
-				"\"": "&quot;",
-				"'": "&#039;"
-			})[character]);
+			return escapeHtml(value);
 		}
 	};
 	customElements.define("trips-recorder-panel", TripsRecorderPanel);
