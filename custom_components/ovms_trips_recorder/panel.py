@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from aiohttp import web
@@ -10,6 +12,8 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_TRIP_STORE, DOMAIN, PANEL_PATH, PANEL_TITLE
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def get_integration_version() -> str:
@@ -58,7 +62,77 @@ class TripsRecorderModuleView(HomeAssistantView):
         return web.Response(text=module, content_type="application/javascript")
 
 
+class VehicleTripsApiView(HomeAssistantView):
+    """Expose trips overlapping a requested interval for one vehicle."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/vehicles/{{vehicle_id}}/trips"
+    name = f"api:{DOMAIN}:vehicle_trips"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, vehicle_id: str) -> web.Response:
+        """Return trips overlapping the inclusive, timezone-aware interval."""
+        bounds = []
+        for parameter in ("from", "to"):
+            value = request.query.get(parameter)
+            try:
+                bound = datetime.fromisoformat(value) if value else None
+            except ValueError:
+                bound = None
+            if bound is None or bound.tzinfo is None:
+                return self.json_message(
+                    f"'{parameter}' must be an ISO 8601 datetime with a timezone.",
+                    status_code=400,
+                )
+            bounds.append(bound)
+        start, end = bounds
+        if start > end:
+            return self.json_message(
+                "'from' must be earlier than or equal to 'to'.", status_code=400
+            )
+
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+
+        trips = []
+        for trip in await store.async_get_trips():
+            if trip.get("vehicle") != vehicle_id or not trip.get("start_time"):
+                continue
+            try:
+                trip_start = datetime.fromisoformat(trip["start_time"])
+                trip_end = (
+                    datetime.fromisoformat(trip["stop_time"])
+                    if trip.get("stop_time") is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                _LOGGER.warning(
+                    "Skipping trip with invalid timestamps for vehicle %s", vehicle_id
+                )
+                continue
+            # Legacy stored timestamps without a timezone represent UTC.
+            if trip_start.tzinfo is None:
+                trip_start = trip_start.replace(tzinfo=timezone.utc)
+            if trip_end is not None and trip_end.tzinfo is None:
+                trip_end = trip_end.replace(tzinfo=timezone.utc)
+            if trip_start <= end and (trip_end is None or trip_end >= start):
+                trips.append(trip)
+        return self.json(
+            {
+                "vehicle": vehicle_id,
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+                "trips": trips,
+                "count": len(trips),
+            }
+        )
+
+
 async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the panel routes consumed by Home Assistant."""
     hass.http.register_view(TripsRecorderApiView(hass))
     hass.http.register_view(TripsRecorderModuleView())
+    hass.http.register_view(VehicleTripsApiView(hass))
