@@ -1,4 +1,7 @@
 {
+  "abort": {
+    "not_admin": "Only administrators can install this integration."
+  },
   "options": {
     "step": {
       "init": {

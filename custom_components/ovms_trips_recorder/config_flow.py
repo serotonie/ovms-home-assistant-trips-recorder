@@ -37,6 +37,11 @@ class TripsRecorderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
+        user_id = self.context.get("user_id")
+        user = await self.hass.auth.async_get_user(user_id) if user_id else None
+        if user is None or not user.is_admin:
+            return self.async_abort(reason="not_admin")
+
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 

@@ -30,6 +30,9 @@ def integration(monkeypatch):
         def async_show_form(self, **kwargs):
             return {"type": "form", **kwargs}
 
+        def async_abort(self, **kwargs):
+            return {"type": "abort", **kwargs}
+
     def module(name, **attrs):
         result = types.ModuleType(name)
         result.__dict__.update(attrs)
@@ -152,6 +155,7 @@ def integration(monkeypatch):
 
     hass = types.SimpleNamespace(
         data={}, is_running=True,
+        auth=types.SimpleNamespace(async_get_user=AsyncMock()),
         config_entries=types.SimpleNamespace(
             async_update_entry=Mock(side_effect=update_entry),
             async_forward_entry_setups=AsyncMock(),
@@ -229,6 +233,37 @@ def test_yaml_import_remains_on_config_flow(integration):
     flow = flow_module.TripsRecorderConfigFlow()
     flow._async_current_entries = lambda: []
     assert asyncio.run(flow.async_step_import())["type"] == "create_entry"
+
+
+@pytest.mark.parametrize(
+    "user,expected",
+    [
+        (types.SimpleNamespace(is_admin=True), "create_entry"),
+        (types.SimpleNamespace(is_admin=False), "abort"),
+        (None, "abort"),
+    ],
+)
+def test_only_admin_can_install_from_user_flow(integration, user, expected):
+    _, flow_module, hass, _, _ = integration
+    hass.auth.async_get_user.return_value = user
+    flow = flow_module.TripsRecorderConfigFlow()
+    flow.context = {"user_id": "user-id"}
+    flow.hass = hass
+    flow._async_current_entries = lambda: []
+    result = asyncio.run(flow.async_step_user())
+    assert result["type"] == expected
+    if expected == "abort":
+        assert result["reason"] == "not_admin"
+
+
+def test_user_flow_without_user_is_not_allowed(integration):
+    _, flow_module, hass, _, _ = integration
+    flow = flow_module.TripsRecorderConfigFlow()
+    flow.context = {}
+    flow.hass = hass
+    assert asyncio.run(flow.async_step_user()) == {
+        "type": "abort", "reason": "not_admin",
+    }
 
 
 def test_default_selectors_are_in_same_form_even_with_hidden_controls(integration):

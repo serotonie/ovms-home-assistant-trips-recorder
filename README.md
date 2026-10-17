@@ -225,7 +225,8 @@ file served by Home Assistant.
 3. Also install and configure the OVMS Home Assistant integration.
 4. Restart Home Assistant.
 5. In Home Assistant, go to **Settings → Devices & Services → Add
-   Integration**, then add **OVMS Trips Recorder**.
+   Integration**, then add **OVMS Trips Recorder**. A Home Assistant
+   administrator must install the integration.
 6. The sidebar panel will then be available from the dashboard sidebar.
 
 ## Development Environment
