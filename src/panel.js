@@ -43,6 +43,8 @@ class TripsRecorderPanel extends HTMLElement {
         this.driverControlsEnabled = false;
         this.driverError = "";
         this.savingDriver = false;
+        this.deleteError = "";
+        this.deletingTripId = null;
         this.categories = [];
         this.categoryControlsEnabled = false;
         this.categoryError = "";
@@ -334,6 +336,28 @@ class TripsRecorderPanel extends HTMLElement {
         }
     }
 
+    async deleteTrip(tripId) {
+        if (!this._hass?.user?.is_admin || !tripId || this.deletingTripId) return;
+        if (typeof window.confirm === "function" && !window.confirm(this.t("confirmDeleteTrip"))) return;
+        this.deletingTripId = tripId;
+        this.deleteError = "";
+        this.updateTripDetails();
+        try {
+            await this._hass.callApi(
+                "DELETE",
+                `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}`,
+            );
+            await this.loadTrips({ refresh: true });
+        } catch (error) {
+            console.error("Failed to delete trip", error);
+            this.deleteError = this.t("deleteTripError");
+        } finally {
+            this.deletingTripId = null;
+            this.updateTripDetails();
+            this.updateDriverSettings();
+        }
+    }
+
     updateTrips(trips, { prefiltered = false } = {}) {
         const previousTrips = this.filteredTrips;
         this.trips = [...trips];
@@ -512,6 +536,9 @@ class TripsRecorderPanel extends HTMLElement {
         }
         this.shadowRoot.querySelector("#retry")?.addEventListener("click", () => this.loadTrips(this.failedRequest));
         this.shadowRoot.querySelector("#load-more")?.addEventListener("click", () => this.loadTrips({ append: true }));
+        this.shadowRoot.querySelectorAll("[data-delete-trip]").forEach((button) => {
+            button.addEventListener("click", () => this.deleteTrip(button.dataset.deleteTrip));
+        });
         if (!this.loading && !this.loadError && this.hasMore && typeof IntersectionObserver === "function") {
             const observer = new IntersectionObserver((entries) => {
                 if (this.paginationObserver === observer && entries.some((entry) => entry.isIntersecting) && !this.loadError) {

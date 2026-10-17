@@ -44,7 +44,7 @@ export function renderPanel(panel) {
         .dot.stop { background: var(--accent-color); }
         .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
         .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
-        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
+        .trip-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
         .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
@@ -112,7 +112,7 @@ export function renderTripDetails(panel, trip) {
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${panel._hass?.user?.is_admin && trip.id ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}</div>
                 `;
 }
 
@@ -132,6 +132,7 @@ export function renderTripCategories(panel, trip) {
 export function renderDriverSettings(panel) {
     return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
         ${panel.categoryError ? `<p class="driver-warning" role="alert">${panel.escape(panel.categoryError)}</p>` : ""}
+        ${panel.deleteError ? `<p class="driver-warning" role="alert">${panel.escape(panel.deleteError)}</p>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 }
 
