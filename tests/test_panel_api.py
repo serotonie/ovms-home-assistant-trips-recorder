@@ -425,3 +425,62 @@ def test_driver_visibility_cannot_be_changed_through_panel_api(admin) -> None:
     ))
     assert result["status_code"] == 404
     assert store.driver_controls_enabled is False
+
+
+class CategoryStore(FakeStore):
+    def __init__(self):
+        super().__init__()
+        self.changes = []
+
+    def get_category_settings(self):
+        return {"enabled": True, "categories": ["Work", "Personal"], "defaults": {"car": ["Work"]}}
+
+    async def async_set_trip_categories(self, trip_id, categories):
+        if not isinstance(categories, list) or any(category not in ["Work", "Personal"] for category in categories):
+            raise ValueError("Choose categories defined by an administrator.")
+        if trip_id == "missing":
+            raise KeyError(trip_id)
+        self.changes.append((trip_id, categories))
+
+
+def test_category_routes_are_authenticated_and_offer_no_definition_write_route() -> None:
+    hass = FakeHass(CategoryStore())
+    views = []
+    hass.http = types.SimpleNamespace(register_view=views.append)
+    asyncio.run(panel.async_setup_panel(hass))
+    read = next(view for view in views if isinstance(view, panel.CategoriesApiView))
+    write = next(view for view in views if isinstance(view, panel.TripCategoriesApiView))
+    assert read.requires_auth is True
+    assert write.requires_auth is True
+    assert not hasattr(read, "put")
+    assert not hasattr(read, "post")
+    assert write.url == "/api/ovms_trips_recorder/categories/trip/{trip_id}"
+    assert asyncio.run(read.get(None)) == hass.data[const.DOMAIN][const.DATA_TRIP_STORE].get_category_settings()
+
+
+@pytest.mark.parametrize("categories", [[], ["Work"], ["Work", "Personal"]])
+def test_authenticated_non_admin_can_select_one_many_or_no_categories(categories) -> None:
+    store = CategoryStore()
+    response = asyncio.run(panel.TripCategoriesApiView(FakeHass(store)).put(
+        DriverRequest({"categories": categories}, admin=False), "trip-1",
+    ))
+    assert response == {"categories": categories}
+    assert store.changes == [("trip-1", categories)]
+
+
+@pytest.mark.parametrize("body", [None, [], {}, {"categories": None}, {"categories": "Work"}, {"categories": ["Invented"]}])
+def test_category_api_rejects_invalid_input_or_new_categories(body) -> None:
+    store = CategoryStore()
+    response = asyncio.run(panel.TripCategoriesApiView(FakeHass(store)).put(DriverRequest(body), "trip"))
+    assert response["status_code"] == 400
+    assert store.changes == []
+
+
+def test_category_api_handles_bad_json_unknown_trip_and_missing_storage() -> None:
+    view = panel.TripCategoriesApiView(FakeHass(CategoryStore()))
+    assert asyncio.run(view.put(DriverRequest(invalid_json=True), "trip"))["status_code"] == 400
+    assert asyncio.run(view.put(DriverRequest({"categories": []}), "missing"))["status_code"] == 404
+    assert asyncio.run(panel.TripCategoriesApiView(FakeHass(None)).put(
+        DriverRequest({"categories": []}), "trip",
+    ))["status_code"] == 503
+    assert asyncio.run(panel.CategoriesApiView(FakeHass(None)).get(None))["status_code"] == 503

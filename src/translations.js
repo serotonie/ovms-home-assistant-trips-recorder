@@ -23,6 +23,11 @@ export const TRANSLATIONS = {
 };
 
 Object.assign(TRANSLATIONS.en, {
+    categories: "Categories",
+    noCategories: "No categories defined. An administrator can add them in the integration settings.",
+    categoryRetired: "removed category",
+    categoryLoadError: "Unable to load categories. Refresh the panel to retry.",
+    categorySaveError: "Unable to save categories. Please try again.",
     driver: "Driver",
     driverNotSet: "Driver not set",
     driverUnavailable: "Person unavailable",
@@ -31,6 +36,11 @@ Object.assign(TRANSLATIONS.en, {
     driverSaveError: "Unable to save the driver. Please try again.",
 });
 Object.assign(TRANSLATIONS.fr, {
+    categories: "Catégories",
+    noCategories: "Aucune catégorie définie. Un administrateur peut en ajouter dans les paramètres de l'intégration.",
+    categoryRetired: "catégorie supprimée",
+    categoryLoadError: "Impossible de charger les catégories. Actualisez le panneau pour réessayer.",
+    categorySaveError: "Impossible d'enregistrer les catégories. Veuillez réessayer.",
     driver: "Conducteur",
     driverNotSet: "Conducteur non défini",
     driverUnavailable: "Personne indisponible",

@@ -2,16 +2,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "Paramètres des conducteurs",
-        "description": "Choisissez si les conducteurs sont affichés dans le panneau Trajets et sélectionnez une personne par défaut pour chaque véhicule. Les valeurs par défaut s'appliquent aux nouveaux trajets et aux trajets sans conducteur, même lorsque les commandes sont masquées. Effacez une sélection pour supprimer la valeur par défaut ; les trajets déjà attribués ne changent pas.",
+        "title": "Paramètres des trajets",
+        "description": "Configurez les conducteurs et les catégories facultatifs. Seuls les administrateurs peuvent définir les catégories. Utilisez des noms uniques, non vides et sans espaces au début ou à la fin. Les catégories supprimées restent sur les trajets déjà classés. Les valeurs par défaut restent actives lorsque les commandes sont masquées. La page suivante permet de choisir les catégories par défaut.",
         "data": {
           "driver_controls_enabled": "Afficher les conducteurs",
-          "driver_defaults": "Conducteurs par défaut par véhicule"
+          "driver_defaults": "Conducteurs par défaut par véhicule",
+          "category_controls_enabled": "Afficher les catégories",
+          "categories": "Catégories disponibles"
+        }
+      },
+      "category_defaults": {
+        "title": "Catégories par défaut par véhicule",
+        "description": "Sélectionnez une ou plusieurs catégories pour chaque véhicule. Les valeurs par défaut s'appliquent aux nouveaux trajets et aux trajets sans catégorie, même lorsque les commandes sont masquées. Effacez une sélection pour supprimer la valeur par défaut sans modifier les trajets déjà classés.",
+        "data": {
+          "category_defaults": "Catégories par défaut par véhicule"
         }
       }
     },
     "error": {
-      "invalid_driver": "Choisissez une personne existante dans Home Assistant pour chaque véhicule."
+      "invalid_driver": "Choisissez une personne existante dans Home Assistant pour chaque véhicule.",
+      "invalid_categories": "Utilisez des noms uniques, non vides et sans espaces au début ou à la fin.",
+      "invalid_category_defaults": "Sélectionnez uniquement des catégories disponibles pour des véhicules connus."
     }
   }
 }

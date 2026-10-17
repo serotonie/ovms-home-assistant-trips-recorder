@@ -262,10 +262,58 @@ class DriverUpdateApiView(HomeAssistantView):
         return self.json({"driver": data["driver"]})
 
 
+class CategoriesApiView(HomeAssistantView):
+    """Read admin-defined choices; category definitions have no REST write route."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/categories"
+    name = f"api:{DOMAIN}:categories"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request):
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        return self.json(store.get_category_settings())
+
+
+class TripCategoriesApiView(HomeAssistantView):
+    """Allow authenticated users to select categories, not define them."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/categories/trip/{{trip_id}}"
+    name = f"api:{DOMAIN}:trip_categories"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def put(self, request, trip_id: str):
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        try:
+            data = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return self.json_message("Invalid JSON body.", status_code=400)
+        if not isinstance(data, dict) or "categories" not in data:
+            return self.json_message("'categories' must be a list of category names.", status_code=400)
+        try:
+            await store.async_set_trip_categories(trip_id, data["categories"])
+        except ValueError as error:
+            return self.json_message(str(error), status_code=400)
+        except KeyError:
+            return self.json_message("Trip not found.", status_code=404)
+        return self.json({"categories": data["categories"]})
+
+
 async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the panel routes consumed by Home Assistant."""
     hass.http.register_view(TripsRecorderApiView(hass))
     hass.http.register_view(DriversApiView(hass))
     hass.http.register_view(DriverUpdateApiView(hass))
+    hass.http.register_view(CategoriesApiView(hass))
+    hass.http.register_view(TripCategoriesApiView(hass))
     hass.http.register_view(TripsRecorderModuleView())
     hass.http.register_view(VehicleTripsApiView(hass))

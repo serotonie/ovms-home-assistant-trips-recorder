@@ -10,6 +10,9 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_CATEGORIES,
+    CONF_CATEGORY_CONTROLS_ENABLED,
+    CONF_CATEGORY_DEFAULTS,
     CONF_DRIVER_CONTROLS_ENABLED,
     CONF_DRIVER_DEFAULTS,
     DATA_SETUP_COMPLETE,
@@ -111,6 +114,17 @@ async def _async_update_options(hass: HomeAssistant, entry) -> None:
     defaults = entry.options.get(CONF_DRIVER_DEFAULTS, {})
     if store.get_driver_defaults() != defaults:
         await store.async_set_driver_defaults(defaults)
+    category_settings = {
+        "enabled": entry.options.get(CONF_CATEGORY_CONTROLS_ENABLED, False),
+        "categories": entry.options.get(CONF_CATEGORIES, []),
+        "defaults": entry.options.get(CONF_CATEGORY_DEFAULTS, {}),
+    }
+    if store.get_category_settings() != category_settings:
+        await store.async_set_category_settings(
+            category_settings["enabled"],
+            category_settings["categories"],
+            category_settings["defaults"],
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:

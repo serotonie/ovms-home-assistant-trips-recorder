@@ -6,9 +6,17 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers.selector import EntitySelector, ObjectSelector
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    ObjectSelector,
+    SelectSelector,
+    TextSelector,
+)
 
 from .const import (
+    CONF_CATEGORIES,
+    CONF_CATEGORY_CONTROLS_ENABLED,
+    CONF_CATEGORY_DEFAULTS,
     CONF_DRIVER_CONTROLS_ENABLED,
     CONF_DRIVER_DEFAULTS,
     DATA_TRIP_STORE,
@@ -43,7 +51,7 @@ class TripsRecorderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class TripsRecorderOptionsFlow(config_entries.OptionsFlow):
-    """Configure optional driver controls."""
+    """Configure driver and category controls and defaults (admin-only HA options)."""
 
     async def async_step_init(self, user_input=None):
         """Show visibility and per-vehicle defaults together."""
@@ -52,6 +60,7 @@ class TripsRecorderOptionsFlow(config_entries.OptionsFlow):
             CONF_DRIVER_DEFAULTS, store.get_driver_defaults()
         )
         vehicles = sorted(set(await store.async_get_vehicle_ids()) | defaults.keys())
+        categories = self.config_entry.options.get(CONF_CATEGORIES, [])
         errors = {}
         if user_input is not None:
             selected = user_input.get(CONF_DRIVER_DEFAULTS, {})
@@ -62,15 +71,22 @@ class TripsRecorderOptionsFlow(config_entries.OptionsFlow):
                 for vehicle, driver in selected.items()
             ):
                 errors[CONF_DRIVER_DEFAULTS] = "invalid_driver"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        **self.config_entry.options,
-                        **user_input,
-                        CONF_DRIVER_DEFAULTS: selected,
-                    },
-                )
+            categories = user_input.get(CONF_CATEGORIES, [])
+            try:
+                store.validate_categories(categories)
+            except ValueError:
+                errors[CONF_CATEGORIES] = "invalid_categories"
+            if not errors:
+                self._options = {
+                    **self.config_entry.options,
+                    **user_input,
+                    CONF_DRIVER_DEFAULTS: selected,
+                    CONF_CATEGORIES: categories,
+                    CONF_CATEGORY_CONTROLS_ENABLED: user_input.get(
+                        CONF_CATEGORY_CONTROLS_ENABLED, False
+                    ),
+                }
+                return await self.async_step_category_defaults()
         schema = {
             vol.Required(
                 CONF_DRIVER_CONTROLS_ENABLED,
@@ -78,6 +94,16 @@ class TripsRecorderOptionsFlow(config_entries.OptionsFlow):
                     CONF_DRIVER_CONTROLS_ENABLED, False
                 ),
             ): bool,
+            vol.Required(
+                CONF_CATEGORY_CONTROLS_ENABLED,
+                default=self.config_entry.options.get(
+                    CONF_CATEGORY_CONTROLS_ENABLED, False
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_CATEGORIES,
+                description={"suggested_value": categories},
+            ): TextSelector({"multiple": True}),
         }
         if vehicles:
             schema[vol.Optional(
@@ -95,5 +121,55 @@ class TripsRecorderOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(schema),
+            errors=errors,
+        )
+
+    async def async_step_category_defaults(self, user_input=None):
+        """Choose defaults from the submitted catalog before saving all options."""
+        store = self.hass.data[DOMAIN][DATA_TRIP_STORE]
+        categories = self._options[CONF_CATEGORIES]
+        previous = self.config_entry.options.get(CONF_CATEGORY_DEFAULTS, {})
+        vehicles = sorted(set(await store.async_get_vehicle_ids()) | previous.keys())
+        if not categories or not vehicles:
+            self._options[CONF_CATEGORY_DEFAULTS] = {}
+            return self.async_create_entry(title="", data=self._options)
+        errors = {}
+        if user_input is not None:
+            defaults = user_input.get(CONF_CATEGORY_DEFAULTS, {})
+            try:
+                for vehicle, selected in defaults.items():
+                    store.validate_categories(selected)
+                    if vehicle not in vehicles or not set(selected) <= set(categories):
+                        raise ValueError
+            except ValueError:
+                errors[CONF_CATEGORY_DEFAULTS] = "invalid_category_defaults"
+            else:
+                self._options[CONF_CATEGORY_DEFAULTS] = defaults
+                return self.async_create_entry(title="", data=self._options)
+        suggested = {
+            vehicle: [category for category in selected if category in categories]
+            for vehicle, selected in previous.items()
+            if vehicle in vehicles
+        }
+        return self.async_show_form(
+            step_id="category_defaults",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_CATEGORY_DEFAULTS,
+                    description={"suggested_value": suggested},
+                ): ObjectSelector({
+                    "fields": {
+                        vehicle: {
+                            "label": vehicle,
+                            "selector": SelectSelector({
+                                "options": categories,
+                                "multiple": True,
+                                "mode": "dropdown",
+                            }),
+                        }
+                        for vehicle in vehicles
+                    },
+                }),
+            }),
             errors=errors,
         )

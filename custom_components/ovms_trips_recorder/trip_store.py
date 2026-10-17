@@ -272,6 +272,13 @@ class TripStore:
 
     def _prepare_trip(self, trip: dict[str, Any]) -> None:
         trip.setdefault("id", uuid4().hex)
+        if "categories" not in trip:
+            settings = self.get_category_settings()
+            trip["categories"] = [
+                category
+                for category in settings["defaults"].get(trip.get("vehicle"), [])
+                if category in settings["categories"]
+            ]
         if not trip.get("driver"):
             driver = self._data.get("driver_defaults", {}).get(trip.get("vehicle"))
             available = {person["id"] for person in self.get_drivers()}
@@ -308,6 +315,66 @@ class TripStore:
         for trip in await self.async_get_trips():
             if trip.get("id") == trip_id:
                 trip["driver"] = driver
+                await self.async_save()
+                return
+        raise KeyError(trip_id)
+
+    def get_category_settings(self) -> dict[str, Any]:
+        """Return independent copies of category choices and defaults."""
+        return {
+            "enabled": self._data.get("category_controls_enabled", False),
+            "categories": list(self._data.get("categories", [])),
+            "defaults": {
+                vehicle: list(categories)
+                for vehicle, categories in self._data.get("category_defaults", {}).items()
+            },
+        }
+
+    @staticmethod
+    def validate_categories(categories: Any) -> None:
+        """Reject malformed or ambiguous category lists."""
+        if (
+            not isinstance(categories, list)
+            or any(
+                not isinstance(category, str)
+                or not category.strip()
+                or category != category.strip()
+                for category in categories
+            )
+            or len(set(categories)) != len(categories)
+        ):
+            raise ValueError("Categories must be unique, non-empty names without surrounding spaces.")
+
+    async def async_set_category_settings(
+        self, enabled: bool, categories: list[str], defaults: dict[str, list[str]]
+    ) -> None:
+        """Apply admin options and backfill only uncategorized trips."""
+        self.validate_categories(categories)
+        for selected in defaults.values():
+            self.validate_categories(selected)
+            if not set(selected) <= set(categories):
+                raise ValueError("Default categories must belong to the available categories.")
+        self._data["category_controls_enabled"] = enabled
+        self._data["categories"] = list(categories)
+        self._data["category_defaults"] = {
+            vehicle: list(selected) for vehicle, selected in defaults.items()
+        }
+        for trip in await self.async_get_trips():
+            if not trip.get("categories"):
+                trip["categories"] = list(defaults.get(trip.get("vehicle"), []))
+        await self.async_save()
+
+    async def async_set_trip_categories(
+        self, trip_id: str, categories: list[str]
+    ) -> None:
+        """Edit active or completed trips without permitting new category definitions."""
+        self.validate_categories(categories)
+        for trip in await self.async_get_trips():
+            if trip.get("id") == trip_id:
+                allowed = set(self._data.get("categories", [])) | set(trip.get("categories", []))
+                if not set(categories) <= allowed:
+                    raise ValueError("Choose categories defined by an administrator.")
+                trip["categories"] = list(categories)
                 await self.async_save()
                 return
         raise KeyError(trip_id)
@@ -541,6 +608,9 @@ class TripStore:
             "trips": [],
             "driver_defaults": self.get_driver_defaults(),
             "driver_controls_enabled": self.driver_controls_enabled,
+            "category_controls_enabled": self.get_category_settings()["enabled"],
+            "categories": self.get_category_settings()["categories"],
+            "category_defaults": self.get_category_settings()["defaults"],
         }
         self._data["active"] = {}
         self._vehicles.clear()

@@ -495,3 +495,90 @@ def test_bulk_defaults_preserve_deleted_people_and_validate_before_mutating() ->
         asyncio.run(store.async_set_driver_defaults({"car": "person.alice", "other": "sensor.invalid"}))
     assert store.get_driver_defaults() == {"car": "person.deleted"}
     assert len(saved) == 1
+
+
+def test_category_defaults_backfill_migrate_and_persist_without_changing_assigned_trips() -> None:
+    data = {
+        "trips": [{"vehicle": "car"}, {"vehicle": "car", "categories": ["Personal"]}],
+        "active": {"other": {"vehicle": "other", "waypoints": []}},
+    }
+    store, saved, _ = driver_store(data)
+    asyncio.run(store.async_load())
+    assert store._data["trips"][0]["categories"] == []
+    assert store.get_category_settings() == {"enabled": False, "categories": [], "defaults": {}}
+    asyncio.run(store.async_set_category_settings(
+        False, ["Work", "Personal"], {"car": ["Work"], "other": ["Work", "Personal"]},
+    ))
+    trips = asyncio.run(store.async_get_trips())
+    assert [trip["categories"] for trip in trips] == [["Work"], ["Personal"], ["Work", "Personal"]]
+    asyncio.run(store._async_start_trip("car"))
+    assert store._data["active"]["car"]["categories"] == ["Work"]
+    restored, _, _ = driver_store(saved[-1])
+    asyncio.run(restored.async_load())
+    assert restored.get_category_settings() == store.get_category_settings()
+    assert [trip["categories"] for trip in asyncio.run(restored.async_get_trips())] == [
+        ["Work"], ["Personal"], ["Work", "Personal"], ["Work"],
+    ]
+    settings = restored.get_category_settings()
+    settings["categories"].clear()
+    settings["defaults"]["car"].clear()
+    assert restored.get_category_settings()["defaults"]["car"] == ["Work"]
+    asyncio.run(restored.async_clear())
+    assert restored.get_category_settings() == store.get_category_settings()
+
+
+def test_category_editing_retired_categories_and_clear_survive_restart() -> None:
+    import pytest
+
+    store, saved, _ = driver_store()
+    asyncio.run(store.async_set_category_settings(True, ["Work", "Personal"], {"car": ["Work"]}))
+    trip = asyncio.run(store.async_add_trip({"vehicle": "car"}))
+    second = asyncio.run(store.async_add_trip({"vehicle": "other"}))
+    asyncio.run(store.async_set_trip_categories(trip["id"], ["Work", "Personal"]))
+    asyncio.run(store.async_set_category_settings(True, ["Personal"], {}))
+    assert trip["categories"] == ["Work", "Personal"]
+    asyncio.run(store.async_set_trip_categories(trip["id"], ["Work"]))
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_set_trip_categories(second["id"], ["Work"]))
+    asyncio.run(store.async_set_trip_categories(trip["id"], []))
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_set_trip_categories(trip["id"], ["Work"]))
+    restored, _, _ = driver_store(saved[-1])
+    asyncio.run(restored.async_load())
+    assert restored._data["trips"][0]["categories"] == []
+    with pytest.raises(KeyError):
+        asyncio.run(store.async_set_trip_categories("missing", ["Personal"]))
+
+
+def test_category_updates_preserve_active_trip_categories_when_it_finishes() -> None:
+    store, _, _ = driver_store()
+    asyncio.run(store.async_set_category_settings(True, ["Work", "Personal"], {}))
+
+    async def geocode(trip):
+        pass
+
+    store._async_geocode_trip = geocode
+    asyncio.run(store._async_start_trip("car"))
+    trip = store._data["active"]["car"]
+    asyncio.run(store.async_set_trip_categories(trip["id"], ["Work", "Personal"]))
+    asyncio.run(store._async_stop_trip("car"))
+    assert store._data["trips"][0]["categories"] == ["Work", "Personal"]
+
+
+def test_category_validation_rejects_invalid_definitions_assignments_and_defaults_atomically() -> None:
+    import pytest
+
+    store, saved, _ = driver_store()
+    trip = asyncio.run(store.async_add_trip({"vehicle": "car"}))
+    asyncio.run(store.async_set_category_settings(False, ["Work"], {}))
+    before = len(saved)
+    for invalid in (None, "Work", {}, [1], [None], [""], [" Work"], ["Work "], ["Work", "Work"]):
+        with pytest.raises(ValueError):
+            asyncio.run(store.async_set_trip_categories(trip["id"], invalid))
+        with pytest.raises(ValueError):
+            asyncio.run(store.async_set_category_settings(False, invalid, {}))
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_set_category_settings(False, ["Personal"], {"car": ["Work"]}))
+    assert len(saved) == before
+    assert store.get_category_settings()["categories"] == ["Work"]
+    assert trip["categories"] == []

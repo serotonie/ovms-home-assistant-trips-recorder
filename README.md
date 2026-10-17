@@ -89,6 +89,49 @@ options flow; the former `/drivers/settings/enabled` and
 This is a UI preference;
 authenticated driver API reads/writes remain available while controls are hidden.
 
+## Trip categories
+
+Categories are optional and independent of drivers. Administrators configure
+them under **Settings > Devices & Services > OVMS Trips Recorder > Configure**:
+
+1. Enable **Show category controls** (disabled by default) and define the
+   **Available categories**, such as `Work`, `Personal`, and `Commute`. Names are
+   case-sensitive, unique, non-empty, and must not have surrounding spaces.
+2. Continue to **Default categories per vehicle** and select zero, one, or many
+   categories for each configured or previously recorded vehicle. This step
+   appears when there are categories and vehicles. Save to apply both pages
+   together; leaving the dialog without saving does not change the settings.
+
+Only administrators can define the category list, visibility, and defaults through
+Home Assistant's integration options. Any authenticated user can check or uncheck
+one or more existing categories on active or completed trip cards. Edits save
+immediately. No category-definition controls exist in the panel or its REST API.
+
+Defaults apply to new trips and backfill existing/ongoing trips without categories
+when category settings change. Categorized trips are never overwritten.
+Hiding controls does not stop assignment. Clearing a trip's categories is allowed
+and survives a restart; a later settings change may backfill that trip again.
+Clearing defaults does not remove categories already assigned to trips.
+
+Removing a category from the available list removes it from the choices/defaults
+on the next options page, but retains it on previously categorized trips with a
+**removed category** label. Users can retain or remove it there, but cannot newly
+assign it to another trip. Renaming a category is removal plus addition; existing
+assignments keep the old name. Re-adding the same name makes it available again.
+
+Category settings and assignments persist across restarts; clearing trips
+preserves the catalog, defaults, and visibility option. Existing trip JSON now
+includes a `categories` list (empty when unassigned), and all trip read APIs
+include it. Driver and category labels have English/French translations and
+English fallback for other panel languages.
+
+- `GET /api/ovms_trips_recorder/categories` (authenticated) returns `enabled`,
+  `categories` (the available names), and `defaults` (vehicle IDs to category lists).
+- `PUT /api/ovms_trips_recorder/categories/trip/{trip_id}` (authenticated)
+  accepts `{"categories": ["Work", "Commute"]}` or `{"categories": []}`.
+  Invalid lists or newly invented categories return 400, unknown trips return 404,
+  and unavailable storage returns 503. Definitions cannot be changed by this API.
+
 ## Structure
 
 ```text

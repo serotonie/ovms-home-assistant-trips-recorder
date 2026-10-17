@@ -50,6 +50,9 @@ export function renderPanel(panel) {
         .pagination-error { color: var(--error-color); }
         .driver-settings { margin-bottom: 24px; }
         .trip-driver { margin-block: 12px; }
+        .trip-categories { margin: 12px 0; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px; }
+        .category-choice { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
+        .category-choice input { width: auto; min-height: auto; }
         .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
@@ -101,6 +104,7 @@ export function renderTripDetails(panel, trip) {
                 <select data-driver-kind="trip" data-driver-target="${panel.escape(trip.id || "")}" ${!trip.id || !panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(trip.driver)}</select>
             </label>
             ${!trip.driver ? `<span class="driver-warning">${panel.escape(panel.t("driverNotSet"))}</span>` : ""}` : ""}
+            ${renderTripCategories(panel, trip)}
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
@@ -110,8 +114,22 @@ export function renderTripDetails(panel, trip) {
                 `;
 }
 
+export function renderTripCategories(panel, trip) {
+    if (!panel.categoryControlsEnabled) return "";
+    const selected = trip.categories || [];
+    const choices = [...new Set([...panel.categories, ...selected])];
+    return `<fieldset class="trip-categories" ${!trip.id || panel.savingCategories ? "disabled" : ""}>
+        <legend>${panel.escape(panel.t("categories"))}</legend>
+        ${!choices.length ? `<span>${panel.escape(panel.t("noCategories"))}</span>` : choices.map((category) =>
+        `<label class="category-choice"><input type="checkbox" data-category-trip="${panel.escape(trip.id || "")}" value="${panel.escape(category)}" ${selected.includes(category) ? "checked" : ""}>
+            <span>${panel.escape(category)}${!panel.categories.includes(category) ? ` (${panel.escape(panel.t("categoryRetired"))})` : ""}</span>
+        </label>`).join("")}
+    </fieldset>`;
+}
+
 export function renderDriverSettings(panel) {
     return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
+        ${panel.categoryError ? `<p class="driver-warning" role="alert">${panel.escape(panel.categoryError)}</p>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 }
 
