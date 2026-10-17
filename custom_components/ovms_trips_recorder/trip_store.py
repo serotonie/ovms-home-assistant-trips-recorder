@@ -288,6 +288,20 @@ class TripStore:
                 trip["driver"] = driver
         await self.async_save()
 
+    async def async_set_driver_defaults(self, defaults: dict[str, str]) -> None:
+        """Apply integration options, retaining assigned trips when defaults change."""
+        previous = self.get_driver_defaults()
+        for vehicle, driver in defaults.items():
+            if previous.get(vehicle) != driver:
+                self._validate_driver(driver)
+        self._data["driver_defaults"] = dict(defaults)
+        available = {person["id"] for person in self.get_drivers()}
+        for trip in await self.async_get_trips():
+            driver = defaults.get(trip.get("vehicle"))
+            if not trip.get("driver") and driver in available:
+                trip["driver"] = driver
+        await self.async_save()
+
     async def async_set_trip_driver(self, trip_id: str, driver: str) -> None:
         """Update a completed or active trip by its persistent ID."""
         self._validate_driver(driver)

@@ -461,3 +461,37 @@ def test_driver_visibility_is_opt_in_persistent_and_does_not_stop_assignment() -
     asyncio.run(restored.async_clear())
     assert restored.driver_controls_enabled is True
     assert restored.get_driver_defaults() == {"car": "person.alice"}
+
+
+def test_bulk_defaults_backfill_without_overwriting_and_support_removal() -> None:
+    store, saved, _ = driver_store()
+    store._data = {
+        "trips": [
+            {"vehicle": "car", "driver": None},
+            {"vehicle": "car", "driver": "person.bob"},
+            {"vehicle": "other", "driver": None},
+        ],
+        "active": {"other": {"vehicle": "other", "driver": None}},
+    }
+    asyncio.run(store.async_set_driver_defaults({"car": "person.alice", "other": "person.bob"}))
+    assert [trip["driver"] for trip in asyncio.run(store.async_get_trips())] == [
+        "person.alice", "person.bob", "person.bob", "person.bob",
+    ]
+    asyncio.run(store.async_set_driver_defaults({}))
+    assert store.get_driver_defaults() == {}
+    assert store._data["trips"][0]["driver"] == "person.alice"
+    assert saved[-1]["driver_defaults"] == {}
+    assert store.driver_controls_enabled is False
+
+
+def test_bulk_defaults_preserve_deleted_people_and_validate_before_mutating() -> None:
+    import pytest
+
+    store, saved, _ = driver_store()
+    store._data["driver_defaults"] = {"car": "person.deleted"}
+    asyncio.run(store.async_set_driver_defaults({"car": "person.deleted"}))
+    assert store.get_driver_defaults() == {"car": "person.deleted"}
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_set_driver_defaults({"car": "person.alice", "other": "sensor.invalid"}))
+    assert store.get_driver_defaults() == {"car": "person.deleted"}
+    assert len(saved) == 1

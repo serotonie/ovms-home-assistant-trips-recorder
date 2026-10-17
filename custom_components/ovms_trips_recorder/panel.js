@@ -91,7 +91,6 @@
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
         .pagination-error { color: var(--error-color); }
         .driver-settings { margin-bottom: 24px; }
-        .driver-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-block: 12px; }
         .trip-driver { margin-block: 12px; }
         .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
@@ -145,13 +144,7 @@
 	}
 	function renderDriverSettings(panel) {
 		return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
-        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}
-        ${panel.driverControlsEnabled && panel._hass?.user?.is_admin ? `<details><summary>${panel.escape(panel.t("defaultDrivers"))}</summary>
-            <p>${panel.escape(panel.t("defaultDriverHelp"))}</p>
-            <div class="driver-defaults">${panel.driverVehicles.map((vehicle) => `<label>${panel.escape(vehicle)}
-                <select data-driver-kind="vehicle" data-driver-target="${panel.escape(vehicle)}" ${!panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(panel.driverDefaults[vehicle])}</select>
-            </label>`).join("")}</div>
-        </details>` : ""}`;
+        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 	}
 	function renderMap(index) {
 		return `<div class="trip-map-canvas" data-index="${index}"></div>`;
@@ -528,8 +521,6 @@
 		driver: "Driver",
 		driverNotSet: "Driver not set",
 		driverUnavailable: "Person unavailable",
-		defaultDrivers: "Default drivers per vehicle",
-		defaultDriverHelp: "Defaults apply to new trips and backfill trips without a driver. Assigned trips are not changed.",
 		noDrivers: "No people available. Add people in Home Assistant Settings > People.",
 		driverLoadError: "Unable to load drivers. Refresh the panel to retry.",
 		driverSaveError: "Unable to save the driver. Please try again."
@@ -538,8 +529,6 @@
 		driver: "Conducteur",
 		driverNotSet: "Conducteur non défini",
 		driverUnavailable: "Personne indisponible",
-		defaultDrivers: "Conducteurs par défaut par véhicule",
-		defaultDriverHelp: "Les valeurs par défaut sont appliquées aux nouveaux trajets et aux trajets sans conducteur. Les trajets déjà attribués ne changent pas.",
 		noDrivers: "Aucune personne disponible. Ajoutez des personnes dans Paramètres > Personnes de Home Assistant.",
 		driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
 		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer."
@@ -7448,8 +7437,6 @@
 			this.trips = [];
 			this.drivers = [];
 			this.driverControlsEnabled = false;
-			this.driverDefaults = {};
-			this.driverVehicles = [];
 			this.driverError = "";
 			this.savingDriver = false;
 			this.vehicles = [];
@@ -7616,8 +7603,6 @@
 				const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
 				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean") throw new Error("Invalid driver settings response");
 				this.drivers = data.drivers;
-				this.driverDefaults = data.defaults;
-				this.driverVehicles = data.vehicles;
 				this.driverControlsEnabled = data.enabled;
 				this.driverError = "";
 			} catch (error) {
@@ -7628,12 +7613,7 @@
 		}
 		updateDriverSettings() {
 			const settings = this.shadowRoot.querySelector("#driver-settings");
-			if (settings) {
-				const open = settings.querySelector("details")?.open;
-				settings.innerHTML = renderDriverSettings(this);
-				const details = settings.querySelector("details");
-				if (details && open) details.open = true;
-			}
+			if (settings) settings.innerHTML = renderDriverSettings(this);
 		}
 		driverOptions(selected) {
 			const missing = selected && !this.drivers.some((driver) => driver.id === selected);

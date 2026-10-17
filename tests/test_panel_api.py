@@ -383,8 +383,8 @@ def test_driver_routes_are_registered_and_authenticated() -> None:
 
 
 @pytest.mark.parametrize("kind,admin,status", [
-    ("trip", False, 200), ("vehicle", True, 200),
-    ("vehicle", False, 403), ("unknown", True, 404),
+    ("trip", False, 200), ("vehicle", True, 404),
+    ("vehicle", False, 404), ("unknown", True, 404),
 ])
 def test_driver_writes_enforce_default_admin_permission(kind, admin, status) -> None:
     store = DriverStore()

@@ -242,10 +242,8 @@ class DriverUpdateApiView(HomeAssistantView):
         self._hass = hass
 
     async def put(self, request, kind: str, target: str):
-        if kind not in {"vehicle", "trip"}:
+        if kind != "trip":
             return self.json_message("Unknown driver target.", status_code=404)
-        if kind == "vehicle" and not request["hass_user"].is_admin:
-            return self.json_message("Only administrators can change driver settings.", status_code=403)
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         if store is None:
             return self.json_message("Trip storage is unavailable.", status_code=503)
@@ -256,10 +254,7 @@ class DriverUpdateApiView(HomeAssistantView):
         if not isinstance(data, dict) or not isinstance(data.get("driver"), str):
             return self.json_message("'driver' must be a person entity ID.", status_code=400)
         try:
-            if kind == "vehicle":
-                await store.async_set_driver_default(target, data["driver"])
-            else:
-                await store.async_set_trip_driver(target, data["driver"])
+            await store.async_set_trip_driver(target, data["driver"])
         except ValueError as error:
             return self.json_message(str(error), status_code=400)
         except KeyError:

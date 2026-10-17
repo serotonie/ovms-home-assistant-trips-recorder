@@ -51,13 +51,16 @@ When enabled, each trip card displays its driver and lets any
 authenticated user select a different person; changes are saved immediately,
 including for ongoing trips.
 
-Disabling the switch hides driver selectors, default-driver settings, and
+Disabling the switch hides trip driver selectors and
 missing-driver warnings for everyone. It does **not** stop automatic assignment:
 new trips still use configured defaults, and all saved assignments and defaults
 are retained. The switch is persistent across restarts and clearing trips.
 
-Administrators can expand **Default drivers per vehicle** above the trip cards
-to select a default for each configured or previously recorded vehicle. Setting
+In the same integration **Configure** dialog, administrators can use
+**Default drivers per vehicle** to select a person for each configured or
+previously recorded vehicle, even when panel driver controls are hidden.
+Existing defaults are preserved when upgrading. Clear a vehicle's selection
+to remove its default without altering assigned trips. Setting
 a default also assigns it to that vehicle's existing and ongoing trips without a
 driver. Changing a default never overwrites an already assigned driver.
 
@@ -77,13 +80,12 @@ read APIs include these fields. Driver choices and writes require authentication
   `defaults` (vehicle ID to person entity ID), `vehicles`, and `enabled`
   (whether the panel shows driver controls).
 - `PUT /api/ovms_trips_recorder/drivers/trip/{trip_id}` changes a trip's driver.
-- `PUT /api/ovms_trips_recorder/drivers/vehicle/{vehicle_id}` changes a default
-  (administrators only).
 
-Both writes accept `{"driver": "person.example"}`. Invalid people or bodies
+Trip driver writes accept `{"driver": "person.example"}`. Invalid people or bodies
 return 400, unknown targets return 404, and unavailable storage returns 503.
-Panel visibility is managed only through the integration's options flow; the
-former `/drivers/settings/enabled` write endpoint is no longer available.
+Panel visibility and default drivers are managed only through the integration's
+options flow; the former `/drivers/settings/enabled` and
+`/drivers/vehicle/{vehicle_id}` write endpoints are no longer available.
 This is a UI preference;
 authenticated driver API reads/writes remain available while controls are hidden.
 

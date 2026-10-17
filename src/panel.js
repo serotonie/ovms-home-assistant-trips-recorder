@@ -40,8 +40,6 @@ class TripsRecorderPanel extends HTMLElement {
         this.trips = [];
         this.drivers = [];
         this.driverControlsEnabled = false;
-        this.driverDefaults = {};
-        this.driverVehicles = [];
         this.driverError = "";
         this.savingDriver = false;
         this.vehicles = [];
@@ -226,8 +224,6 @@ class TripsRecorderPanel extends HTMLElement {
                 throw new Error("Invalid driver settings response");
             }
             this.drivers = data.drivers;
-            this.driverDefaults = data.defaults;
-            this.driverVehicles = data.vehicles;
             this.driverControlsEnabled = data.enabled;
             this.driverError = "";
         } catch (error) {
@@ -239,12 +235,7 @@ class TripsRecorderPanel extends HTMLElement {
 
     updateDriverSettings() {
         const settings = this.shadowRoot.querySelector("#driver-settings");
-        if (settings) {
-            const open = settings.querySelector("details")?.open;
-            settings.innerHTML = renderDriverSettings(this);
-            const details = settings.querySelector("details");
-            if (details && open) details.open = true;
-        }
+        if (settings) settings.innerHTML = renderDriverSettings(this);
     }
 
     driverOptions(selected) {

@@ -3,9 +3,13 @@
     "step": {
       "init": {
         "title": "Trip driver settings",
-        "description": "Choose whether driver controls are shown in the Trips panel. Automatic assignment using saved per-vehicle defaults continues when controls are hidden.",
+        "description": "Choose whether driver controls are shown in the Trips panel and select a default person for each vehicle. Defaults apply to new trips and backfill trips without a driver, even when controls are hidden. Clear a vehicle's selection to remove its default; assigned trips are not changed.",
         "data": {
-          "driver_controls_enabled": "Show driver controls"
+          "driver_controls_enabled": "Show driver controls",
+          "driver_defaults": "Default drivers per vehicle"
+        },
+        "error": {
+          "invalid_driver": "Choose an existing Home Assistant person for each vehicle."
         }
       }
     }
