@@ -313,6 +313,7 @@ test("trip deletion is admin-only, confirmed, and refreshes the list", async () 
     assert.equal(panel.deletingTripId, null);
     assert.equal(panel.deleteError, "");
     assert.match(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip="trip-1"/);
+    assert.match(panel.renderTripDetails({ id: "trip-1" }), /aria-label="Delete trip"[^>]*data-delete-trip="trip-1"[^>]*<ha-icon icon="mdi:delete"/);
     panel._hass.user.is_admin = false;
     assert.doesNotMatch(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip/);
 });
@@ -375,6 +376,10 @@ test("trip merge previews the combined result before saving and then refreshes",
         id: "first", vehicle: "car", stop_time: "2026-10-16T11:00:00Z",
         merge_next_id: "following",
     }), /data-merge-trip="first" data-merge-next="following"/);
+    assert.match(panel.renderTripDetails({
+        id: "first", vehicle: "car", stop_time: "2026-10-16T11:00:00Z",
+        merge_next_id: "following",
+    }), /aria-label="Merge with next trip"[^>]*data-merge-trip="first"[^>]*<ha-icon icon="mdi:call-merge"/);
     await panel.previewTripMerge("first", "following");
     assert.equal(dialog.open, true);
     assert.match(dialog.innerHTML, /15\.0 km/);
@@ -485,7 +490,8 @@ test("category controls are opt-in, escaped, multi-select and preserve retired s
     panel.categoryControlsEnabled = true;
     panel.categories = ["Work", 'Personal & "fun"'];
     const html = panel.renderTripDetails(trip);
-    assert.match(html, /<fieldset class="trip-categories"/);
+    assert.match(html, /<details class="trip-categories">\s*<summary>Categories<\/summary>/);
+    assert.ok(html.indexOf('<div class="trip-foot"') < html.indexOf('<details class="trip-categories">'));
     assert.match(html, /data-category-trip="trip-1" value="Work" checked/);
     assert.match(html, /Personal &amp; &quot;fun&quot;/);
     assert.match(html, /&lt;Retired&gt; \(removed category\)/);
