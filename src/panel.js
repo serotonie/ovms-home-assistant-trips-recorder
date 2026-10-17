@@ -27,7 +27,7 @@ function loadLeafletModule() {
     return leafletModulePromise;
 }
 
-const PANEL_API = "/api/ovms_trips_recorder/trips";
+const PANEL_API = "ovms_trips_recorder/trips";
 const TRIP_UPDATED_EVENT = "ovms_trips_recorder_updated";
 
 class TripsRecorderPanel extends HTMLElement {
@@ -200,10 +200,7 @@ class TripsRecorderPanel extends HTMLElement {
                 for (const [key, value] of Object.entries(this.filters)) {
                     if (value) parameters.set(key, value);
                 }
-                const response = await fetch(`${PANEL_API}?${parameters}`);
-                if (generation !== this.requestGeneration) return;
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                data = await response.json();
+                data = await this._hass.callApi("GET", `${PANEL_API}?${parameters}`);
                 if (generation !== this.requestGeneration) return;
                 if (await checkFrontendVersion(data.version)) return;
                 if (generation !== this.requestGeneration) return;

@@ -115,6 +115,21 @@ def test_trips_endpoint_returns_version_without_store() -> None:
     assert data["count"] == 0
 
 
+def test_all_registered_api_views_require_authentication() -> None:
+    hass = FakeHass(FakeStore())
+    views = []
+    hass.http = types.SimpleNamespace(register_view=views.append)
+
+    asyncio.run(panel.async_setup_panel(hass))
+
+    api_views = [
+        view for view in views
+        if not isinstance(view, panel.TripsRecorderModuleView)
+    ]
+    assert api_views
+    assert all(view.requires_auth is True for view in api_views)
+
+
 def _panel_request(trips, query):
     view = panel.TripsRecorderApiView(FakeHass(FakeStore(trips)))
     return asyncio.run(view.get(types.SimpleNamespace(query=query)))

@@ -212,10 +212,10 @@ Trips are stored locally in Home Assistant and survive restarts. Driver and
 category settings are also persistent; clearing trips does not reset their
 defaults or visibility settings.
 
-**Privacy:** the sidebar's trip-list API currently does not require authentication
-and returns recorded trips, including location and assignment data. Hiding panel
-controls does not protect this endpoint; consider this when allowing network
-access to your Home Assistant instance.
+**Privacy:** all integration data APIs require Home Assistant authentication,
+including the sidebar's trip list with location and assignment data. The Trips
+panel uses the current Home Assistant session. Hiding panel controls does not
+restrict API access for authenticated users.
 
 | Symptom | What to check |
 | --- | --- |
@@ -437,10 +437,12 @@ rm -rf dev/ha-config/.storage
 
 ### 3.3. REST API reference
 
-All endpoints below require Home Assistant authentication **except**
-`GET /api/ovms_trips_recorder/trips` (the sidebar results endpoint), which currently
-allows unauthenticated reads. For authenticated endpoints, use a Home Assistant
-long-lived access token for `HA_TOKEN` and keep it out of source control.
+All endpoints below require Home Assistant authentication, including
+`GET /api/ovms_trips_recorder/trips`. Anonymous requests or invalid access tokens
+receive HTTP 401. The Trips panel uses the current Home Assistant session.
+External clients must use the `Authorization` header with the `Bearer` scheme
+and a Home Assistant access token. Use a long-lived access token for `HA_TOKEN`
+and keep it out of source control.
 Driver/category visibility settings do not restrict their authenticated APIs;
 deletion is administrator-only, and merging has the additional rules below.
 

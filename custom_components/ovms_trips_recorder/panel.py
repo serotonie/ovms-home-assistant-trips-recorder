@@ -45,7 +45,7 @@ async def _can_merge_trip(request, store, trip_id: str) -> bool:
 class TripsRecorderApiView(HomeAssistantView):
     """Expose recorded trips as JSON for the side panel."""
 
-    requires_auth = False
+    requires_auth = True
     url = f"/api/{PANEL_PATH}/trips"
     name = f"api:{DOMAIN}:trips"
 
