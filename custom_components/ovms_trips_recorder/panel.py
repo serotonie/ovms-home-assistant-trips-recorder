@@ -23,6 +23,17 @@ def get_integration_version() -> str:
     return json.loads(manifest.read_text(encoding="utf-8")).get("version", "")
 
 
+def _matches_trip_filters(trip: dict, query) -> bool:
+    """Combine exact driver and category-membership filters."""
+    return (
+        (not query.get("driver") or trip.get("driver") == query["driver"])
+        and (
+            not query.get("category")
+            or query["category"] in (trip.get("categories") or [])
+        )
+    )
+
+
 class TripsRecorderApiView(HomeAssistantView):
     """Expose recorded trips as JSON for the side panel."""
 
@@ -72,10 +83,16 @@ class TripsRecorderApiView(HomeAssistantView):
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         trips = await store.async_get_trips() if store else []
         vehicles = await store.async_get_vehicle_ids() if store else []
-        if paginated or bounds or query.get("vehicle"):
+        driver_ids = sorted({trip["driver"] for trip in trips if trip.get("driver")})
+        category_names = sorted({
+            category for trip in trips for category in (trip.get("categories") or [])
+        })
+        if paginated or bounds or any(query.get(key) for key in ("vehicle", "driver", "category")):
             selected = []
             for index, trip in enumerate(trips):
                 if query.get("vehicle") and trip.get("vehicle") != query["vehicle"]:
+                    continue
+                if not _matches_trip_filters(trip, query):
                     continue
                 start = None
                 if trip.get("start_time"):
@@ -119,6 +136,8 @@ class TripsRecorderApiView(HomeAssistantView):
                 "title": PANEL_TITLE,
                 "trips": trips,
                 "vehicles": vehicles,
+                "driver_ids": driver_ids,
+                "category_names": category_names,
                 "count": count,
                 "version": get_integration_version(),
                 **pagination,
@@ -178,6 +197,8 @@ class VehicleTripsApiView(HomeAssistantView):
         trips = []
         for trip in await store.async_get_trips():
             if trip.get("vehicle") != vehicle_id or not trip.get("start_time"):
+                continue
+            if not _matches_trip_filters(trip, request.query):
                 continue
             try:
                 trip_start = datetime.fromisoformat(trip["start_time"])

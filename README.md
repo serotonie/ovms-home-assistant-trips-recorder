@@ -27,10 +27,8 @@ fully opaque without recreating the map.
 
 ## Results pagination
 
-The sidebar loads the newest trips in batches of **10**. Change **Trips per
-batch** (1–100) in the filters to adjust the batch size for the current panel
-session. Changing a filter or batch size restarts at the newest matching trips;
-**Reset** also restores the batch size to 10.
+The sidebar loads the newest trips in batches of **10**. Changing a filter
+restarts at the newest matching trips.
 
 Scrolling near the bottom automatically loads the next batch. **Load more**
 is also available for keyboard navigation or browsers without infinite-scroll
@@ -38,6 +36,32 @@ support. The counter shows loaded / matching trips until all matches are loaded.
 Loading failures keep existing results and offer **Retry** instead of repeatedly
 retrying automatically. Live trip updates refresh the already-loaded window,
 without loading the entire history or recreating unchanged map containers.
+
+The **Driver** and **Category** dropdowns combine with the date and vehicle
+filters. Driver matches an exact person entity ID; category matches trips
+containing that category (including trips with multiple categories). The
+dropdowns follow their respective integration visibility settings. An already
+selected filter stays visible if the setting is subsequently hidden, so it can
+be cleared. **Reset** clears all filters.
+
+Choices include current people/categories and assignments from the entire trip
+history, not only the loaded batch, so deleted people and removed categories
+remain searchable. Driver names are displayed when the person still exists.
+
+Both trip read endpoints accept optional `driver` and `category` query parameters:
+
+- `/api/ovms_trips_recorder/trips?driver=person.alice&category=Work&limit=10`
+- `/api/ovms_trips_recorder/vehicles/car/trips?from=2026-10-01T00:00:00Z&to=2026-10-31T23:59:59Z&driver=person.alice&category=Work`
+
+Parameters are single, exact, case-sensitive values; URL-encode names containing
+spaces or special characters. Empty values disable a filter. All supplied
+filters are combined with AND, and unknown values return no matches. Filtering
+is applied before counts and pagination. Trips without assignments do not match
+a non-empty driver/category filter. Omitting parameters preserves existing
+behavior; the vehicle endpoint retains its required datetime interval and
+authentication. API filtering works regardless of panel visibility settings.
+The panel trips response also includes unfiltered `driver_ids` and
+`category_names` lists for history-wide filter choices.
 
 ## Trip drivers
 

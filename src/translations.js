@@ -23,6 +23,9 @@ export const TRANSLATIONS = {
 };
 
 Object.assign(TRANSLATIONS.en, {
+    allDrivers: "All drivers",
+    category: "Category",
+    allCategories: "All categories",
     categories: "Categories",
     noCategories: "No categories defined. An administrator can add them in the integration settings.",
     categoryRetired: "removed category",
@@ -36,6 +39,9 @@ Object.assign(TRANSLATIONS.en, {
     driverSaveError: "Unable to save the driver. Please try again.",
 });
 Object.assign(TRANSLATIONS.fr, {
+    allDrivers: "Tous les conducteurs",
+    category: "Catégorie",
+    allCategories: "Toutes les catégories",
     categories: "Catégories",
     noCategories: "Aucune catégorie définie. Un administrateur peut en ajouter dans les paramètres de l'intégration.",
     categoryRetired: "catégorie supprimée",
@@ -50,29 +56,29 @@ Object.assign(TRANSLATIONS.fr, {
 });
 
 const PAGINATION_TRANSLATIONS = {
-    en: ["Trips per batch", "Load more", "Loading…", "Retry"],
-    fr: ["Trajets par lot", "Charger plus", "Chargement…", "Réessayer"],
-    de: ["Fahrten pro Abruf", "Mehr laden", "Wird geladen…", "Erneut versuchen"],
-    es: ["Viajes por lote", "Cargar más", "Cargando…", "Reintentar"],
-    it: ["Viaggi per gruppo", "Carica altri", "Caricamento…", "Riprova"],
-    nl: ["Ritten per batch", "Meer laden", "Laden…", "Opnieuw proberen"],
-    pt: ["Viagens por lote", "Carregar mais", "A carregar…", "Tentar novamente"],
-    "pt-BR": ["Viagens por lote", "Carregar mais", "Carregando…", "Tentar novamente"],
-    pl: ["Przejazdy na partię", "Wczytaj więcej", "Wczytywanie…", "Spróbuj ponownie"],
-    ru: ["Поездок за раз", "Загрузить ещё", "Загрузка…", "Повторить"],
-    sv: ["Resor per omgång", "Läs in fler", "Läser in…", "Försök igen"],
-    da: ["Ture pr. hentning", "Indlæs flere", "Indlæser…", "Prøv igen"],
-    no: ["Turer per innlasting", "Last inn flere", "Laster…", "Prøv igjen"],
-    fi: ["Matkoja kerralla", "Lataa lisää", "Ladataan…", "Yritä uudelleen"],
-    cs: ["Cest v dávce", "Načíst další", "Načítání…", "Zkusit znovu"],
-    tr: ["Grup başına sürüş", "Daha fazla yükle", "Yükleniyor…", "Tekrar dene"],
-    uk: ["Поїздок за раз", "Завантажити ще", "Завантаження…", "Повторити"],
-    ja: ["一度に読み込む走行数", "さらに読み込む", "読み込み中…", "再試行"],
-    "zh-Hans": ["每批行程数", "加载更多", "加载中…", "重试"],
-    "zh-Hant": ["每批行程數", "載入更多", "載入中…", "重試"],
-    ko: ["한 번에 불러올 주행 수", "더 불러오기", "불러오는 중…", "다시 시도"],
+    en: ["Load more", "Loading…", "Retry"],
+    fr: ["Charger plus", "Chargement…", "Réessayer"],
+    de: ["Mehr laden", "Wird geladen…", "Erneut versuchen"],
+    es: ["Cargar más", "Cargando…", "Reintentar"],
+    it: ["Carica altri", "Caricamento…", "Riprova"],
+    nl: ["Meer laden", "Laden…", "Opnieuw proberen"],
+    pt: ["Carregar mais", "A carregar…", "Tentar novamente"],
+    "pt-BR": ["Carregar mais", "Carregando…", "Tentar novamente"],
+    pl: ["Wczytaj więcej", "Wczytywanie…", "Spróbuj ponownie"],
+    ru: ["Загрузить ещё", "Загрузка…", "Повторить"],
+    sv: ["Läs in fler", "Läser in…", "Försök igen"],
+    da: ["Indlæs flere", "Indlæser…", "Prøv igen"],
+    no: ["Last inn flere", "Laster…", "Prøv igjen"],
+    fi: ["Lataa lisää", "Ladataan…", "Yritä uudelleen"],
+    cs: ["Načíst další", "Načítání…", "Zkusit znovu"],
+    tr: ["Daha fazla yükle", "Yükleniyor…", "Tekrar dene"],
+    uk: ["Завантажити ще", "Завантаження…", "Повторити"],
+    ja: ["さらに読み込む", "読み込み中…", "再試行"],
+    "zh-Hans": ["加载更多", "加载中…", "重试"],
+    "zh-Hant": ["載入更多", "載入中…", "重試"],
+    ko: ["더 불러오기", "불러오는 중…", "다시 시도"],
 };
 
-for (const [language, [pageSize, loadMore, loading, retry]] of Object.entries(PAGINATION_TRANSLATIONS)) {
-    Object.assign(TRANSLATIONS[language], { pageSize, loadMore, loading, retry });
+for (const [language, [loadMore, loading, retry]] of Object.entries(PAGINATION_TRANSLATIONS)) {
+    Object.assign(TRANSLATIONS[language], { loadMore, loading, retry });
 }

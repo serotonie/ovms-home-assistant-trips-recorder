@@ -59,7 +59,8 @@
         .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
         .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
-        .filters { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        .filters label[hidden] { display: none; }
         label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
         input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
         input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
@@ -106,7 +107,8 @@
                     <label>${panel.t("from")} <input id="from" type="date"></label>
                     <label>${panel.t("to")} <input id="to" type="date"></label>
                     <label>${panel.t("vehicle")} <select id="vehicle"><option value="">${panel.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${panel.escape(vehicle)}">${panel.escape(vehicle)}</option>`).join("")}</select></label>
-                    <label>${panel.t("pageSize")} <input id="page-size" type="number" min="1" max="100" step="1" value="${panel.pageSize}"></label>
+                    <label ${!panel.driverControlsEnabled && !panel.filters.driver ? "hidden" : ""}>${panel.t("driver")} <select id="driver"></select></label>
+                    <label ${!panel.categoryControlsEnabled && !panel.filters.category ? "hidden" : ""}>${panel.t("category")} <select id="category"></select></label>
                     <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
         </form>
                 <section id="driver-settings" class="driver-settings" aria-live="polite">${renderDriverSettings(panel)}</section>
@@ -534,6 +536,9 @@
 		}
 	};
 	Object.assign(TRANSLATIONS.en, {
+		allDrivers: "All drivers",
+		category: "Category",
+		allCategories: "All categories",
 		categories: "Categories",
 		noCategories: "No categories defined. An administrator can add them in the integration settings.",
 		categoryRetired: "removed category",
@@ -547,6 +552,9 @@
 		driverSaveError: "Unable to save the driver. Please try again."
 	});
 	Object.assign(TRANSLATIONS.fr, {
+		allDrivers: "Tous les conducteurs",
+		category: "Catégorie",
+		allCategories: "Toutes les catégories",
 		categories: "Catégories",
 		noCategories: "Aucune catégorie définie. Un administrateur peut en ajouter dans les paramètres de l'intégration.",
 		categoryRetired: "catégorie supprimée",
@@ -559,135 +567,113 @@
 		driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
 		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer."
 	});
-	for (const [language, [pageSize, loadMore, loading, retry]] of Object.entries({
+	for (const [language, [loadMore, loading, retry]] of Object.entries({
 		en: [
-			"Trips per batch",
 			"Load more",
 			"Loading…",
 			"Retry"
 		],
 		fr: [
-			"Trajets par lot",
 			"Charger plus",
 			"Chargement…",
 			"Réessayer"
 		],
 		de: [
-			"Fahrten pro Abruf",
 			"Mehr laden",
 			"Wird geladen…",
 			"Erneut versuchen"
 		],
 		es: [
-			"Viajes por lote",
 			"Cargar más",
 			"Cargando…",
 			"Reintentar"
 		],
 		it: [
-			"Viaggi per gruppo",
 			"Carica altri",
 			"Caricamento…",
 			"Riprova"
 		],
 		nl: [
-			"Ritten per batch",
 			"Meer laden",
 			"Laden…",
 			"Opnieuw proberen"
 		],
 		pt: [
-			"Viagens por lote",
 			"Carregar mais",
 			"A carregar…",
 			"Tentar novamente"
 		],
 		"pt-BR": [
-			"Viagens por lote",
 			"Carregar mais",
 			"Carregando…",
 			"Tentar novamente"
 		],
 		pl: [
-			"Przejazdy na partię",
 			"Wczytaj więcej",
 			"Wczytywanie…",
 			"Spróbuj ponownie"
 		],
 		ru: [
-			"Поездок за раз",
 			"Загрузить ещё",
 			"Загрузка…",
 			"Повторить"
 		],
 		sv: [
-			"Resor per omgång",
 			"Läs in fler",
 			"Läser in…",
 			"Försök igen"
 		],
 		da: [
-			"Ture pr. hentning",
 			"Indlæs flere",
 			"Indlæser…",
 			"Prøv igen"
 		],
 		no: [
-			"Turer per innlasting",
 			"Last inn flere",
 			"Laster…",
 			"Prøv igjen"
 		],
 		fi: [
-			"Matkoja kerralla",
 			"Lataa lisää",
 			"Ladataan…",
 			"Yritä uudelleen"
 		],
 		cs: [
-			"Cest v dávce",
 			"Načíst další",
 			"Načítání…",
 			"Zkusit znovu"
 		],
 		tr: [
-			"Grup başına sürüş",
 			"Daha fazla yükle",
 			"Yükleniyor…",
 			"Tekrar dene"
 		],
 		uk: [
-			"Поїздок за раз",
 			"Завантажити ще",
 			"Завантаження…",
 			"Повторити"
 		],
 		ja: [
-			"一度に読み込む走行数",
 			"さらに読み込む",
 			"読み込み中…",
 			"再試行"
 		],
 		"zh-Hans": [
-			"每批行程数",
 			"加载更多",
 			"加载中…",
 			"重试"
 		],
 		"zh-Hant": [
-			"每批行程數",
 			"載入更多",
 			"載入中…",
 			"重試"
 		],
 		ko: [
-			"한 번에 불러올 주행 수",
 			"더 불러오기",
 			"불러오는 중…",
 			"다시 시도"
 		]
 	})) Object.assign(TRANSLATIONS[language], {
-		pageSize,
 		loadMore,
 		loading,
 		retry
@@ -7475,8 +7461,12 @@
 			this.filters = {
 				from: "",
 				to: "",
-				vehicle: ""
+				vehicle: "",
+				driver: "",
+				category: ""
 			};
+			this.driverIds = [];
+			this.categoryNames = [];
 			this.unsubscribeUpdates = null;
 			this.loading = false;
 			this._narrow = null;
@@ -7607,6 +7597,8 @@
 				this.hasMore = data.has_more;
 				this.nextOffset = data.next_offset;
 				this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+				this.driverIds = Array.isArray(data.driver_ids) ? data.driver_ids : [];
+				this.categoryNames = Array.isArray(data.category_names) ? data.category_names : [];
 				await Promise.all([this.loadDriverSettings(), this.loadCategorySettings()]);
 				if (generation !== this.requestGeneration) return;
 				this.updateTrips(trips, { prefiltered: true });
@@ -7748,13 +7740,15 @@
 			this.filters = {
 				from: this.shadowRoot.querySelector("#from")?.value ?? this.filters.from,
 				to: this.shadowRoot.querySelector("#to")?.value ?? this.filters.to,
-				vehicle: this.shadowRoot.querySelector("#vehicle")?.value ?? this.filters.vehicle
+				vehicle: this.shadowRoot.querySelector("#vehicle")?.value ?? this.filters.vehicle,
+				driver: this.shadowRoot.querySelector("#driver")?.value ?? this.filters.driver,
+				category: this.shadowRoot.querySelector("#category")?.value ?? this.filters.category
 			};
 			if (render) {
 				this.loadTrips();
 				return;
 			}
-			const { from, to, vehicle } = this.filters;
+			const { from, to, vehicle, driver, category } = this.filters;
 			const dateFormatter = from || to ? new Intl.DateTimeFormat("en-CA", {
 				timeZone: this._hass?.config?.time_zone || void 0,
 				year: "numeric",
@@ -7764,7 +7758,7 @@
 			this.filteredTrips = this.trips.filter((trip) => {
 				const start = new Date(trip.start_time);
 				const tripDate = dateFormatter ? this.getCalendarDate(start, dateFormatter) : "";
-				return (!from || tripDate && tripDate >= from) && (!to || tripDate && tripDate <= to) && (!vehicle || trip.vehicle === vehicle);
+				return (!from || tripDate && tripDate >= from) && (!to || tripDate && tripDate <= to) && (!vehicle || trip.vehicle === vehicle) && (!driver || trip.driver === driver) && (!category || (trip.categories || []).includes(category));
 			});
 		}
 		getCalendarDate(date, formatter) {
@@ -7811,22 +7805,16 @@
 		bindEvents() {
 			this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
 			this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
-				const field = this.shadowRoot.querySelector("#page-size");
-				if (!field.checkValidity()) {
-					field.reportValidity();
-					return;
-				}
-				this.pageSize = Number(field.value);
 				this.applyFilters();
 			});
 			this.shadowRoot.querySelector("#reset")?.addEventListener("click", () => {
 				this.shadowRoot.querySelector(".filters").reset();
-				this.pageSize = 10;
-				this.shadowRoot.querySelector("#page-size").value = "10";
 				this.filters = {
 					from: "",
 					to: "",
-					vehicle: ""
+					vehicle: "",
+					driver: "",
+					category: ""
 				};
 				this.applyFilters();
 			});
@@ -7844,6 +7832,7 @@
 			this.paginationObserver = null;
 			const footer = this.shadowRoot.querySelector("#pagination");
 			if (!footer) return;
+			this.updateTripFilterChoices();
 			footer.innerHTML = this.renderPagination();
 			footer.setAttribute("aria-busy", String(this.loading));
 			const count = this.shadowRoot.querySelector(".trip-count");
@@ -7864,6 +7853,33 @@
 				}, { rootMargin: "300px" });
 				this.paginationObserver = observer;
 				observer.observe(footer);
+			}
+		}
+		updateTripFilterChoices() {
+			const driver = this.shadowRoot.querySelector("#driver");
+			const category = this.shadowRoot.querySelector("#category");
+			if (driver) {
+				const ids = [.../* @__PURE__ */ new Set([
+					...this.drivers.map((person) => person.id),
+					...this.driverIds,
+					...this.trips.map((trip) => trip.driver).filter(Boolean),
+					...this.filters.driver ? [this.filters.driver] : []
+				])].sort();
+				const names = new Map(this.drivers.map((person) => [person.id, person.name]));
+				driver.innerHTML = `<option value="">${this.escape(this.t("allDrivers"))}</option>` + ids.map((id) => `<option value="${this.escape(id)}">${this.escape(names.get(id) || id)}</option>`).join("");
+				driver.value = this.filters.driver || "";
+				driver.closest("label").hidden = !this.driverControlsEnabled && !this.filters.driver;
+			}
+			if (category) {
+				const names = [.../* @__PURE__ */ new Set([
+					...this.categories,
+					...this.categoryNames,
+					...this.trips.flatMap((trip) => trip.categories || []),
+					...this.filters.category ? [this.filters.category] : []
+				])].sort();
+				category.innerHTML = `<option value="">${this.escape(this.t("allCategories"))}</option>` + names.map((name) => `<option value="${this.escape(name)}">${this.escape(name)}</option>`).join("");
+				category.value = this.filters.category || "";
+				category.closest("label").hidden = !this.categoryControlsEnabled && !this.filters.category;
 			}
 		}
 		renderLeafletMaps() {
