@@ -96,6 +96,9 @@
         .trip-driver { margin-block: 12px; }
         .trip-categories { margin: 12px 0 0; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; }
         .trip-categories summary { color: var(--secondary-text-color); cursor: pointer; font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
+        .trip-categories[open] .category-badges { display: none; }
+        .category-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-inline-start: 8px; vertical-align: middle; }
+        .category-badge { padding: 2px 8px; border-radius: 999px; color: var(--primary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-xs, 12px); font-weight: 400; }
         .trip-categories fieldset { margin: 8px 0 0; padding: 0; border: 0; }
         .category-choice { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
         .category-choice input { width: auto; min-height: auto; }
@@ -154,16 +157,17 @@
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `<span class="trip-actions">${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-icon-button title="${panel.escape(panel.t("mergeTrip"))}" aria-label="${panel.escape(panel.t("mergeTrip"))}" data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" ${panel.mergingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:call-merge"></ha-icon></ha-icon-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-icon-button class="trip-delete" title="${panel.escape(panel.t("deleteTrip"))}" aria-label="${panel.escape(panel.t("deleteTrip"))}" data-delete-trip="${panel.escape(trip.id)}" ${panel.deletingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>` : ""}</span>` : ""}</div>
             ${renderTripCategories(panel, trip)}
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `<span class="trip-actions">${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-icon-button title="${panel.escape(panel.t("mergeTrip"))}" aria-label="${panel.escape(panel.t("mergeTrip"))}" data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" ${panel.mergingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:call-merge"></ha-icon></ha-icon-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-icon-button class="trip-delete" title="${panel.escape(panel.t("deleteTrip"))}" aria-label="${panel.escape(panel.t("deleteTrip"))}" data-delete-trip="${panel.escape(trip.id)}" ${panel.deletingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>` : ""}</span>` : ""}</div>
                 `;
 	}
 	function renderTripCategories(panel, trip) {
 		if (!panel.categoryControlsEnabled) return "";
 		const selected = trip.categories || [];
 		const choices = [.../* @__PURE__ */ new Set([...panel.categories, ...selected])];
+		const badges = selected.length ? `<span class="category-badges">${selected.map((category) => `<span class="category-badge">${panel.escape(category)}</span>`).join("")}</span>` : "";
 		return `<details class="trip-categories">
-        <summary>${panel.escape(panel.t("categories"))}</summary>
+        <summary>${panel.escape(panel.t("categories"))}${badges}</summary>
         <fieldset ${!trip.id || panel.savingCategories ? "disabled" : ""}>
         <legend class="visually-hidden">${panel.escape(panel.t("categories"))}</legend>
         ${!choices.length ? `<span>${panel.escape(panel.t("noCategories"))}</span>` : choices.map((category) => `<label class="category-choice"><input type="checkbox" data-category-trip="${panel.escape(trip.id || "")}" value="${panel.escape(category)}" ${selected.includes(category) ? "checked" : ""}>

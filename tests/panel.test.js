@@ -490,8 +490,8 @@ test("category controls are opt-in, escaped, multi-select and preserve retired s
     panel.categoryControlsEnabled = true;
     panel.categories = ["Work", 'Personal & "fun"'];
     const html = panel.renderTripDetails(trip);
-    assert.match(html, /<details class="trip-categories">\s*<summary>Categories<\/summary>/);
-    assert.ok(html.indexOf('<div class="trip-foot"') < html.indexOf('<details class="trip-categories">'));
+    assert.match(html, /<details class="trip-categories">\s*<summary>Categories<span class="category-badges"><span class="category-badge">Work<\/span><span class="category-badge">&lt;Retired&gt;<\/span><\/span><\/summary>/);
+    assert.ok(html.indexOf('<details class="trip-categories">') < html.indexOf('<div class="trip-foot"'));
     assert.match(html, /data-category-trip="trip-1" value="Work" checked/);
     assert.match(html, /Personal &amp; &quot;fun&quot;/);
     assert.match(html, /&lt;Retired&gt; \(removed category\)/);
