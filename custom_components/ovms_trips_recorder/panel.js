@@ -70,6 +70,7 @@
         .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
         .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
         .trip-map-canvas { display: block; width: 100%; height: 100%; }
+        .trip-map-canvas.dark-map .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
         .trip-details { display: flex; flex-direction: column; padding: 16px; }
         .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
         .trip-head { align-items: flex-start; flex-wrap: wrap; }
@@ -7533,12 +7534,14 @@
 			this.loadError = false;
 		}
 		set hass(value) {
+			const wasDarkMode = Boolean(this._hass?.themes?.darkMode);
 			this._hass = value;
 			const locale = this.getLocale();
 			if (this.initialized && locale !== this.locale) {
 				this.locale = locale;
 				this.render();
 			}
+			if (this.initialized && wasDarkMode !== Boolean(value?.themes?.darkMode)) this.updateMapTheme();
 			if (!this.initialized) {
 				this.locale = locale;
 				this.initialized = true;
@@ -8016,6 +8019,12 @@
 		renderLeafletMaps() {
 			return this.queueMapTask(() => this.renderLeafletMapsNow());
 		}
+		updateMapTheme() {
+			return this.queueMapTask(() => {
+				const darkMode = Boolean(this._hass?.themes?.darkMode);
+				for (const entry of this.maps.values()) entry.container.classList?.toggle("dark-map", darkMode);
+			});
+		}
 		queueMapTask(task) {
 			this._mapRenderQueue = (this._mapRenderQueue || Promise.resolve()).catch(() => {}).then(task).catch((error) => {
 				console?.error?.("Failed to update trip maps", error);
@@ -8044,6 +8053,7 @@
 						zoomControl: true,
 						scrollWheelZoom: false
 					});
+					container.classList?.toggle("dark-map", Boolean(this._hass?.themes?.darkMode));
 					Leaflet.tileLayer(this.getTileUrl(), {
 						attribution: this.getTileAttribution(),
 						maxZoom: 19
@@ -8053,11 +8063,13 @@
 						path: Leaflet.polyline(points, pathStyle).addTo(map),
 						startMarker: null,
 						endMarker: null,
-						points
+						points,
+						container
 					};
 					this.maps.set(container, entry);
 					this.observeMapResize(container, entry);
 				} else {
+					container.classList?.toggle("dark-map", Boolean(this._hass?.themes?.darkMode));
 					entry.path.setLatLngs(points);
 					entry.path.setStyle(pathStyle);
 					entry.points = points;
