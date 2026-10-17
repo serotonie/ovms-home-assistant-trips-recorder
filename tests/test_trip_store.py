@@ -8,6 +8,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 def _install_home_assistant_stubs() -> None:
     """Provide the small Home Assistant surface required to import TripStore."""
@@ -110,6 +112,106 @@ def test_delete_trip_removes_completed_and_active_trips_and_persists() -> None:
     assert store._vehicles["car"]["trip"] is None
     assert cancelled == ["car"]
     assert len(saves) == 2
+
+
+def test_merge_trip_preview_and_merge_preserve_route_and_remove_following_trip() -> None:
+    first = {
+        "id": "first", "vehicle": "car", "start_time": "2026-01-01T10:00:00Z",
+        "stop_time": "2026-01-01T11:00:00Z", "distance": 10,
+        "waypoints": [{"timestamp": "10:00"}], "categories": ["Work"],
+        "stop_road": "First street",
+    }
+    following = {
+        "id": "following", "vehicle": "car", "start_time": "2026-01-01T12:00:00Z",
+        "stop_time": "2026-01-01T13:00:00Z", "distance": 5,
+        "waypoints": [{"timestamp": "12:00"}], "categories": ["Personal"],
+        "driver": "person.alice", "stop_road": "Second street",
+    }
+    other_vehicle = {
+        "id": "other", "vehicle": "van", "start_time": "2026-01-01T11:30:00Z",
+        "stop_time": "2026-01-01T11:45:00Z",
+    }
+    store = TripStore.__new__(TripStore)
+    store._data = {"trips": [first, other_vehicle, following], "active": {}}
+    saves = []
+
+    async def save():
+        saves.append(True)
+
+    store.async_save = save
+
+    async def merge():
+        assert await store.async_get_trip_merge_candidates() == {"first": "following"}
+        preview = await store.async_get_trip_merge_preview("first")
+        assert preview["trip"]["distance"] == 15
+        assert preview["trip"]["stop_road"] == "Second street"
+        assert preview["trip"]["waypoints"] == [
+            {"timestamp": "10:00"}, {"timestamp": "12:00"},
+        ]
+        assert preview["trip"]["categories"] == ["Work", "Personal"]
+        assert preview["trip"]["driver"] == "person.alice"
+        result = await store.async_merge_trips("first", "following")
+        assert result["trip"]["stop_time"] == "2026-01-01T13:00:00Z"
+
+    asyncio.run(merge())
+    assert [trip["id"] for trip in store._data["trips"]] == ["first", "other"]
+    assert first["distance"] == 15
+    assert len(saves) == 1
+
+
+@pytest.mark.parametrize("following_start", [
+    "2026-01-01T10:30:00Z",
+    "invalid",
+])
+def test_merge_preview_rejects_overlapping_or_invalid_next_trip(following_start) -> None:
+    store = TripStore.__new__(TripStore)
+    store._data = {"trips": [
+        {"id": "first", "vehicle": "car", "start_time": "2026-01-01T10:00:00Z",
+         "stop_time": "2026-01-01T11:00:00Z"},
+        {"id": "following", "vehicle": "car", "start_time": following_start,
+         "stop_time": "2026-01-01T12:00:00Z"},
+    ]}
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_get_trip_merge_preview("first"))
+
+
+def test_merge_rejects_stale_next_trip_and_missing_trip() -> None:
+    store = TripStore.__new__(TripStore)
+    store._data = {"trips": [
+        {"id": "first", "vehicle": "car", "start_time": "2026-01-01T10:00:00Z",
+         "stop_time": "2026-01-01T11:00:00Z"},
+        {"id": "following", "vehicle": "car", "start_time": "2026-01-01T12:00:00Z",
+         "stop_time": "2026-01-01T13:00:00Z"},
+    ]}
+    with pytest.raises(ValueError):
+        asyncio.run(store.async_merge_trips("first", "different"))
+    with pytest.raises(KeyError):
+        asyncio.run(store.async_get_trip_merge_preview("missing"))
+    assert len(store._data["trips"]) == 2
+
+
+def test_only_linked_trip_driver_can_merge_when_driver_controls_are_enabled() -> None:
+    alice = types.SimpleNamespace(
+        entity_id="person.alice", attributes={"user_id": "user-alice"}
+    )
+    bob = types.SimpleNamespace(
+        entity_id="person.bob", attributes={"user_id": "user-bob"}
+    )
+    store = TripStore.__new__(TripStore)
+    store._hass = types.SimpleNamespace(
+        states=types.SimpleNamespace(async_all=lambda domain: [alice, bob])
+    )
+    store._data = {
+        "driver_controls_enabled": True,
+        "trips": [{"id": "trip-1", "driver": "person.alice"}],
+    }
+
+    assert store.get_driver_id_for_user("user-alice") == "person.alice"
+    assert store.get_driver_id_for_user("unknown") is None
+    assert asyncio.run(store.async_user_owns_trip("trip-1", "user-alice"))
+    assert not asyncio.run(store.async_user_owns_trip("trip-1", "user-bob"))
+    store._data["driver_controls_enabled"] = False
+    assert not asyncio.run(store.async_user_owns_trip("trip-1", "user-alice"))
 
 
 def test_delete_trip_during_stop_does_not_restore_deleted_trip() -> None:

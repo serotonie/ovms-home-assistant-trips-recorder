@@ -226,6 +226,117 @@ class TripStore:
         active_trips = self._data.get("active", {}).values()
         return trips + list(active_trips)
 
+    async def async_get_trip_merge_candidates(self) -> dict[str, str]:
+        """Return the next completed trip ID for each mergeable trip."""
+        completed = self._data.get("trips", [])
+        candidates = {}
+        for trip in completed:
+            following = self._get_next_merge_trip(trip, completed)
+            if following is not None:
+                candidates[trip["id"]] = following["id"]
+        return candidates
+
+    async def async_get_trip_merge_preview(self, trip_id: str) -> dict[str, Any]:
+        """Return the merged result for a trip and its next same-vehicle trip."""
+        completed = self._data.get("trips", [])
+        first = next((trip for trip in completed if trip.get("id") == trip_id), None)
+        if first is None:
+            raise KeyError(trip_id)
+        following = self._get_next_merge_trip(first, completed)
+        if following is None:
+            raise ValueError("No following trip is available to merge.")
+        return self._merged_trip(first, following)
+
+    async def async_merge_trips(self, trip_id: str, next_trip_id: str) -> dict[str, Any]:
+        """Merge a completed trip with its immediate next trip and persist it."""
+        preview = await self.async_get_trip_merge_preview(trip_id)
+        if preview["next_trip_id"] != next_trip_id:
+            raise ValueError("The following trip has changed. Refresh and try again.")
+        completed = self._data.get("trips", [])
+        first = next(trip for trip in completed if trip.get("id") == trip_id)
+        following = next(trip for trip in completed if trip.get("id") == next_trip_id)
+        first.clear()
+        first.update(preview["trip"])
+        completed.remove(following)
+        await self.async_save()
+        return preview
+
+    @staticmethod
+    def _trip_timestamp(trip: dict[str, Any], field: str) -> datetime | None:
+        """Parse a stored trip timestamp, treating legacy naive values as UTC."""
+        try:
+            timestamp = datetime.fromisoformat(trip[field])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+
+    @classmethod
+    def _get_next_merge_trip(
+        cls, trip: dict[str, Any], completed: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        """Find the immediately following non-overlapping trip for this vehicle."""
+        if not trip.get("id") or not trip.get("vehicle"):
+            return None
+        trip_start = cls._trip_timestamp(trip, "start_time")
+        trip_stop = cls._trip_timestamp(trip, "stop_time")
+        if trip_start is None or trip_stop is None or trip_stop < trip_start:
+            return None
+        following = []
+        for index, candidate in enumerate(completed):
+            if (
+                candidate is trip
+                or not candidate.get("id")
+                or candidate.get("vehicle") != trip["vehicle"]
+            ):
+                continue
+            candidate_start = cls._trip_timestamp(candidate, "start_time")
+            candidate_stop = cls._trip_timestamp(candidate, "stop_time")
+            if (
+                candidate_start is not None
+                and candidate_stop is not None
+                and candidate_stop >= candidate_start
+                and candidate_start > trip_start
+            ):
+                following.append((candidate_start, index, candidate))
+        if not following:
+            return None
+        candidate_start, _, candidate = min(following, key=lambda item: item[:2])
+        return candidate if candidate_start >= trip_stop else None
+
+    @staticmethod
+    def _merged_trip(first: dict[str, Any], following: dict[str, Any]) -> dict[str, Any]:
+        """Build the combined trip while preserving the first trip's identity."""
+        merged = dict(first)
+        for field in (
+            "stop_time",
+            "stop_point_lat",
+            "stop_point_long",
+            "stop_house_number",
+            "stop_road",
+            "stop_village",
+            "stop_postcode",
+            "stop_country",
+        ):
+            merged[field] = following.get(field)
+        merged["distance"] = float(first.get("distance") or 0) + float(
+            following.get("distance") or 0
+        )
+        merged["waypoints"] = [
+            *(first.get("waypoints") or []),
+            *(following.get("waypoints") or []),
+        ]
+        merged["categories"] = list(dict.fromkeys([
+            *(first.get("categories") or []),
+            *(following.get("categories") or []),
+        ]))
+        if not merged.get("driver"):
+            merged["driver"] = following.get("driver")
+        return {
+            "trip_id": first["id"],
+            "next_trip_id": following["id"],
+            "trip": merged,
+        }
+
     async def async_get_vehicle_ids(self) -> list[str]:
         """Return configured and observed vehicle IDs for filter controls."""
         observed_vehicle_ids = {
@@ -271,6 +382,29 @@ class TripStore:
                 for state in self._hass.states.async_all("person")
             ],
             key=lambda person: (person["name"].casefold(), person["id"]),
+        )
+
+    def get_driver_id_for_user(self, user_id: str | None) -> str | None:
+        """Return the person entity linked to a Home Assistant user."""
+        if not user_id:
+            return None
+        return next(
+            (
+                state.entity_id
+                for state in self._hass.states.async_all("person")
+                if state.attributes.get("user_id") == user_id
+            ),
+            None,
+        )
+
+    async def async_user_owns_trip(self, trip_id: str, user_id: str | None) -> bool:
+        """Check whether an enabled driver controls the requested completed trip."""
+        if not self.driver_controls_enabled:
+            return False
+        driver_id = self.get_driver_id_for_user(user_id)
+        return bool(driver_id) and any(
+            trip.get("id") == trip_id and trip.get("driver") == driver_id
+            for trip in self._data.get("trips", [])
         )
 
     def get_driver_defaults(self) -> dict[str, str]:

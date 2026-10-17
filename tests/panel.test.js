@@ -221,6 +221,7 @@ const paginationTrips = Array.from({ length: 23 }, (_, index) => ({
 
 test("driver selection escapes person names and keeps deleted assignments visible", () => {
     const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { user: { is_admin: false } };
     panel.driverControlsEnabled = true;
     panel.drivers = [{ id: "person.alice", name: '<Alice & "Bob">' }];
     const html = panel.renderTripDetails({ id: "trip-1", driver: "person.alice", waypoints: [] });
@@ -241,7 +242,7 @@ test("default driver settings are absent from the panel for admins and other use
         user: { is_admin: true },
         async callApi(...args) {
             calls.push(args);
-            return { enabled: true, drivers: [{ id: "person.alice", name: "Alice" }], defaults: { car: "person.alice" }, vehicles: ["car"] };
+            return { enabled: true, drivers: [{ id: "person.alice", name: "Alice" }], defaults: { car: "person.alice" }, vehicles: ["car"], user_driver_id: "person.alice" };
         },
     };
     await panel.loadDriverSettings();
@@ -314,6 +315,105 @@ test("trip deletion respects cancellation and reports failures", async () => {
     panel._hass.user.is_admin = true;
     await panel.deleteTrip("trip-1");
     assert.match(panel.deleteError, /Unable to delete the trip/);
+});
+
+test("trip merge previews the combined result before saving and then refreshes", async () => {
+    const calls = [];
+    const dialog = {
+        open: false,
+        showModal() { this.open = true; },
+        close() { this.open = false; },
+    };
+    const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = {
+        user: { is_admin: true },
+        async callApi(...args) {
+            calls.push(args);
+            return args[0] === "GET" ? {
+                trip_id: "first",
+                next_trip_id: "following",
+                trip: {
+                    vehicle: "car",
+                    start_time: "2026-10-16T10:00:00Z",
+                    stop_time: "2026-10-16T12:00:00Z",
+                    distance: 15,
+                },
+            } : {};
+        },
+    };
+    panel.shadowRoot.querySelector = (selector) => (
+        selector === "#trip-merge-dialog" ? dialog : null
+    );
+    panel.loadTrips = async (options) => calls.push(options);
+
+    assert.match(panel.renderTripDetails({
+        id: "first", vehicle: "car", stop_time: "2026-10-16T11:00:00Z",
+        merge_next_id: "following",
+    }), /data-merge-trip="first" data-merge-next="following"/);
+    await panel.previewTripMerge("first", "following");
+    assert.equal(dialog.open, true);
+    assert.match(dialog.innerHTML, /15\.0 km/);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["GET", "ovms_trips_recorder/trips/first/merge-preview"],
+    ]);
+
+    await panel.confirmTripMerge();
+
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["GET", "ovms_trips_recorder/trips/first/merge-preview"],
+        ["POST", "ovms_trips_recorder/trips/first/merge", { next_trip_id: "following" }],
+        { refresh: true },
+    ]);
+    assert.equal(dialog.open, false);
+    assert.equal(panel.mergePreview, null);
+    assert.equal(panel.mergingTripId, null);
+});
+
+test("trip merge action is shown to the linked driver only when controls are enabled", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { user: { is_admin: false } };
+    panel.driverControlsEnabled = true;
+    panel.userDriverId = "person.alice";
+    const ownTrip = {
+        id: "first", driver: "person.alice", stop_time: "2026-10-16T11:00:00Z",
+        merge_next_id: "following",
+    };
+    const anotherTrip = { ...ownTrip, id: "other", driver: "person.bob" };
+    assert.match(panel.renderTripDetails(ownTrip), /data-merge-trip="first"/);
+    assert.doesNotMatch(panel.renderTripDetails(anotherTrip), /data-merge-trip/);
+    panel.driverControlsEnabled = false;
+    assert.doesNotMatch(panel.renderTripDetails(ownTrip), /data-merge-trip/);
+    panel._hass.user.is_admin = true;
+    assert.match(panel.renderTripDetails(anotherTrip), /data-merge-trip="other"/);
+});
+
+test("trip merge rejects unassigned users and reports preview and save failures", async () => {
+    const dialog = {
+        open: true,
+        innerHTML: "",
+        showModal() { this.open = true; },
+        close() { this.open = false; },
+    };
+    const { panel } = createPanelWithFakeLeaflet();
+    panel.shadowRoot.querySelector = (selector) => (
+        selector === "#trip-merge-dialog" ? dialog : null
+    );
+    panel._hass = { user: { is_admin: false }, async callApi() { throw new Error("failed"); } };
+    await panel.previewTripMerge("first", "following");
+    assert.equal(panel.mergeError, "");
+
+    panel._hass.user.is_admin = true;
+    panel._hass.callApi = async () => {
+        throw new Error("failed");
+    };
+    await panel.previewTripMerge("first", "following");
+    assert.match(panel.mergeError, /Unable to merge the trips/);
+    panel.mergePreview = {
+        trip_id: "first", next_trip_id: "following", trip: { distance: 2 },
+    };
+    await panel.confirmTripMerge();
+    assert.match(panel.mergeError, /Unable to merge the trips/);
+    assert.doesNotMatch(dialog.innerHTML, /data-confirm-merge disabled/);
 });
 
 test("driver visibility is controlled by integration options, not a panel toggle", async () => {

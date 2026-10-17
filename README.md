@@ -102,7 +102,8 @@ read APIs include these fields. Driver choices and writes require authentication
 
 - `GET /api/ovms_trips_recorder/drivers` returns `drivers` (`id`, `name`),
   `defaults` (vehicle ID to person entity ID), `vehicles`, and `enabled`
-  (whether the panel shows driver controls).
+  (whether the panel shows driver controls), plus `user_driver_id` for the
+  authenticated user's linked person entity (or `null` when none is linked).
 - `PUT /api/ovms_trips_recorder/drivers/trip/{trip_id}` changes a trip's driver.
 
 Trip driver writes accept `{"driver": "person.example"}`. Invalid people or bodies
@@ -166,6 +167,29 @@ administrators:
 - `DELETE /api/ovms_trips_recorder/trips/{trip_id}` deletes the matching trip.
   It returns 403 for non-administrators, 404 for an unknown trip, and 503 when
   trip storage is unavailable.
+
+## Merging trips
+
+Administrators can merge a completed trip with the next completed, non-overlapping
+trip for the same vehicle. When driver controls are enabled, a driver linked to a
+Home Assistant user can also merge trips assigned to their person entity. The panel
+displays a preview of the combined route,
+times, and distance in a dialog before the merge is confirmed. The merged trip
+keeps the first trip's ID and start details, uses the second trip's stop details,
+combines waypoints, and sums distances. Categories are combined and the first
+available driver assignment is retained.
+
+The API offers a preview and a merge action to administrators or the assigned
+driver when driver controls are enabled:
+
+- `GET /api/ovms_trips_recorder/trips/{trip_id}/merge-preview` returns the
+  proposed combined trip.
+- `POST /api/ovms_trips_recorder/trips/{trip_id}/merge` accepts
+  `{"next_trip_id": "..."}` and rechecks that the trips are still mergeable.
+
+Both endpoints require an administrator or assigned driver. Missing trips return
+404, unauthorized users return 403, invalid or stale merges return 409, and
+unavailable storage returns 503.
 
 ## Structure
 

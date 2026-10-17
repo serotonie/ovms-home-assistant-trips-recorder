@@ -97,6 +97,10 @@
         .category-choice { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
         .category-choice input { width: auto; min-height: auto; }
         .driver-warning { color: var(--error-color); }
+        #trip-merge-dialog { max-width: min(560px, calc(100vw - 48px)); color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); }
+        #trip-merge-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+        .merge-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+        .merge-error { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
       </style>
@@ -114,7 +118,7 @@
                 <section id="driver-settings" class="driver-settings" aria-live="polite">${renderDriverSettings(panel)}</section>
                 <div class="trips-grid">${panel.renderTrips()}</div>
                 <div id="pagination" class="pagination" aria-live="polite" aria-busy="${panel.loading}">${panel.renderPagination()}</div>
-      </main>`);
+      </main><dialog id="trip-merge-dialog" aria-labelledby="trip-merge-title"></dialog>`);
 		const fromField = panel.shadowRoot.querySelector("#from");
 		const toField = panel.shadowRoot.querySelector("#to");
 		const vehicleField = panel.shadowRoot.querySelector("#vehicle");
@@ -145,7 +149,7 @@
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${panel._hass?.user?.is_admin && trip.id ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}</div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-button data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" appearance="outlined" ${panel.mergingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("mergeTrip"))}</ha-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}` : ""}</div>
                 `;
 	}
 	function renderTripCategories(panel, trip) {
@@ -163,7 +167,23 @@
 		return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
         ${panel.categoryError ? `<p class="driver-warning" role="alert">${panel.escape(panel.categoryError)}</p>` : ""}
         ${panel.deleteError ? `<p class="driver-warning" role="alert">${panel.escape(panel.deleteError)}</p>` : ""}
+        ${panel.mergeError ? `<p class="driver-warning" role="alert">${panel.escape(panel.mergeError)}</p>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
+	}
+	function renderTripMergeDialog(panel) {
+		const trip = panel.mergePreview?.trip;
+		if (!trip) return "";
+		return `<h2 id="trip-merge-title">${panel.escape(panel.t("mergeTrip"))}</h2>
+        <p>${panel.escape(panel.t("mergePreview"))}</p>
+        <p><strong>${panel.escape(panel.t("vehicle"))}:</strong> ${panel.escape(trip.vehicle || "")}</p>
+        <p><strong>${panel.escape(panel.t("from"))}:</strong> ${panel.escape(panel.formatDate(trip.start_time))} · ${panel.escape(panel.formatAddress(trip, "start"))}</p>
+        <p><strong>${panel.escape(panel.t("to"))}:</strong> ${panel.escape(panel.formatDate(trip.stop_time))} · ${panel.escape(panel.formatAddress(trip, "stop"))}</p>
+        <p><strong>${panel.escape(panel.t("distance"))}:</strong> ${Number(trip.distance || 0).toFixed(1)} km</p>
+        ${panel.mergeError ? `<p class="merge-error" role="alert">${panel.escape(panel.mergeError)}</p>` : ""}
+        <div class="merge-actions">
+            <ha-button data-cancel-merge appearance="outlined">${panel.escape(panel.t("cancel"))}</ha-button>
+            <ha-button data-confirm-merge ${panel.mergingTripId ? "disabled" : ""}>${panel.escape(panel.t("confirmMerge"))}</ha-button>
+        </div>`;
 	}
 	function renderMap(index) {
 		return `<div class="trip-map-canvas" data-index="${index}"></div>`;
@@ -553,7 +573,13 @@
 		driverSaveError: "Unable to save the driver. Please try again.",
 		deleteTrip: "Delete trip",
 		confirmDeleteTrip: "Permanently delete this trip?",
-		deleteTripError: "Unable to delete the trip. Please try again."
+		deleteTripError: "Unable to delete the trip. Please try again.",
+		mergeTrip: "Merge with next trip",
+		mergePreview: "Review the combined trip before confirming.",
+		distance: "Distance",
+		cancel: "Cancel",
+		confirmMerge: "Merge trips",
+		mergeTripError: "Unable to merge the trips. Please refresh and try again."
 	});
 	Object.assign(TRANSLATIONS.fr, {
 		allDrivers: "Tous les conducteurs",
@@ -572,7 +598,13 @@
 		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer.",
 		deleteTrip: "Supprimer le trajet",
 		confirmDeleteTrip: "Supprimer définitivement ce trajet ?",
-		deleteTripError: "Impossible de supprimer le trajet. Veuillez réessayer."
+		deleteTripError: "Impossible de supprimer le trajet. Veuillez réessayer.",
+		mergeTrip: "Fusionner avec le trajet suivant",
+		mergePreview: "Vérifiez le trajet fusionné avant de confirmer.",
+		distance: "Distance",
+		cancel: "Annuler",
+		confirmMerge: "Fusionner les trajets",
+		mergeTripError: "Impossible de fusionner les trajets. Actualisez et réessayez."
 	});
 	for (const [language, [loadMore, loading, retry]] of Object.entries({
 		en: [
@@ -7457,14 +7489,22 @@
 			this.shadowRoot.addEventListener?.("click", (event) => {
 				const button = event.target.closest?.("[data-delete-trip]");
 				if (button) this.deleteTrip(button.dataset.deleteTrip);
+				const mergeButton = event.target.closest?.("[data-merge-trip]");
+				if (mergeButton) this.previewTripMerge(mergeButton.dataset.mergeTrip, mergeButton.dataset.mergeNext);
+				if (event.target.closest?.("[data-confirm-merge]")) this.confirmTripMerge();
+				if (event.target.closest?.("[data-cancel-merge]")) this.cancelTripMerge();
 			});
 			this.trips = [];
 			this.drivers = [];
 			this.driverControlsEnabled = false;
+			this.userDriverId = null;
 			this.driverError = "";
 			this.savingDriver = false;
 			this.deleteError = "";
 			this.deletingTripId = null;
+			this.mergingTripId = null;
+			this.mergePreview = null;
+			this.mergeError = "";
 			this.categories = [];
 			this.categoryControlsEnabled = false;
 			this.categoryError = "";
@@ -7637,12 +7677,14 @@
 			if (!this._hass?.callApi) return;
 			try {
 				const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
-				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean") throw new Error("Invalid driver settings response");
+				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean" || data.user_driver_id != null && typeof data.user_driver_id !== "string") throw new Error("Invalid driver settings response");
 				this.drivers = data.drivers;
 				this.driverControlsEnabled = data.enabled;
+				this.userDriverId = data.user_driver_id || null;
 				this.driverError = "";
 			} catch (error) {
 				console.error("Failed to load drivers", error);
+				this.userDriverId = null;
 				this.driverError = this.t("driverLoadError");
 			}
 			this.updateDriverSettings();
@@ -7698,6 +7740,9 @@
 			const missing = selected && !this.drivers.some((driver) => driver.id === selected);
 			return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` + (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") + this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
 		}
+		canMergeTrip(trip) {
+			return Boolean(this._hass?.user?.is_admin || this.driverControlsEnabled && this.userDriverId && trip.driver === this.userDriverId);
+		}
 		async saveDriver(field) {
 			if (this.savingDriver) return;
 			const kind = field.dataset.driverKind;
@@ -7738,6 +7783,60 @@
 				this.updateTripDetails();
 				this.updateDriverSettings();
 			}
+		}
+		async previewTripMerge(tripId, nextTripId) {
+			if (!this._hass?.user?.is_admin || !tripId || !nextTripId || this.mergingTripId) return;
+			this.mergingTripId = tripId;
+			this.mergeError = "";
+			this.updateTripDetails();
+			try {
+				const preview = await this._hass.callApi("GET", `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}/merge-preview`);
+				if (preview?.trip_id !== tripId || preview?.next_trip_id !== nextTripId || !preview.trip || !Number.isFinite(Number(preview.trip.distance))) throw new Error("Invalid merge preview response");
+				this.mergePreview = preview;
+				this.updateTripMergeDialog(true);
+			} catch (error) {
+				console.error("Failed to preview trip merge", error);
+				this.mergeError = this.t("mergeTripError");
+				this.updateDriverSettings();
+			} finally {
+				this.mergingTripId = null;
+				this.updateTripDetails();
+			}
+		}
+		async confirmTripMerge() {
+			if (!this._hass?.user?.is_admin || !this.mergePreview || this.mergingTripId) return;
+			const { trip_id: tripId, next_trip_id: nextTripId } = this.mergePreview;
+			this.mergingTripId = tripId;
+			this.mergeError = "";
+			this.updateTripMergeDialog(false);
+			this.updateTripDetails();
+			try {
+				await this._hass.callApi("POST", `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}/merge`, { next_trip_id: nextTripId });
+				this.cancelTripMerge();
+				await this.loadTrips({ refresh: true });
+			} catch (error) {
+				console.error("Failed to merge trips", error);
+				this.mergeError = this.t("mergeTripError");
+				this.updateTripMergeDialog(true);
+			} finally {
+				this.mergingTripId = null;
+				if (this.mergePreview) this.updateTripMergeDialog(true);
+				this.updateTripDetails();
+			}
+		}
+		cancelTripMerge() {
+			this.mergePreview = null;
+			this.mergeError = "";
+			const dialog = this.shadowRoot.querySelector("#trip-merge-dialog");
+			if (dialog?.open) dialog.close();
+			if (dialog) dialog.innerHTML = "";
+			this.updateTripDetails();
+		}
+		updateTripMergeDialog(open) {
+			const dialog = this.shadowRoot.querySelector("#trip-merge-dialog");
+			if (!dialog) return;
+			dialog.innerHTML = renderTripMergeDialog(this);
+			if (open && !dialog.open) dialog.showModal?.();
 		}
 		updateTrips(trips, { prefiltered = false } = {}) {
 			const previousTrips = this.filteredTrips;
@@ -7835,6 +7934,10 @@
 		}
 		bindEvents() {
 			this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
+			this.shadowRoot.querySelector("#trip-merge-dialog")?.addEventListener("cancel", (event) => {
+				event.preventDefault();
+				this.cancelTripMerge();
+			});
 			this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
 				this.applyFilters();
 			});
