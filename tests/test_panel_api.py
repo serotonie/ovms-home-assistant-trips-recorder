@@ -546,6 +546,13 @@ def test_trip_delete_requires_admin_and_reports_store_results() -> None:
 
 
 class MergeStore(FakeStore):
+    def __init__(self):
+        super().__init__([
+            {"id": "trip-1", "driver": "person.bob"},
+            {"id": "trip-2", "driver": "person.bob"},
+        ])
+        self.merge_calls = []
+
     async def async_get_trip_merge_preview(self, trip_id):
         if trip_id == "missing":
             raise KeyError(trip_id)
@@ -558,14 +565,23 @@ class MergeStore(FakeStore):
             raise KeyError(trip_id)
         if next_trip_id != "trip-2":
             raise ValueError("The following trip has changed.")
+        self.merge_calls.append((trip_id, next_trip_id))
         return {"trip_id": trip_id, "next_trip_id": next_trip_id}
+
+    async def async_set_trip_driver(self, trip_id, driver):
+        for trip in self.trips:
+            if trip["id"] == trip_id:
+                trip["driver"] = driver
+                return
+        raise KeyError(trip_id)
 
     async def async_user_owns_trip(self, trip_id, user_id):
         return user_id == "user-alice" and trip_id == "trip-1"
 
 
-def test_trip_merge_routes_allow_admins_and_assigned_drivers_only() -> None:
-    hass = FakeHass(MergeStore())
+def test_trip_merge_routes_require_admin_and_reject_self_assignment() -> None:
+    store = MergeStore()
+    hass = FakeHass(store)
     views = []
     hass.http = types.SimpleNamespace(register_view=views.append)
     asyncio.run(panel.async_setup_panel(hass))
@@ -577,6 +593,20 @@ def test_trip_merge_routes_allow_admins_and_assigned_drivers_only() -> None:
     assert merge.requires_auth is True
     assert asyncio.run(preview.get(DriverRequest(admin=False), "trip-1"))["status_code"] == 403
     assert asyncio.run(merge.post(DriverRequest({"next_trip_id": "trip-2"}, admin=False), "trip-1"))["status_code"] == 403
+    driver_update = panel.DriverUpdateApiView(hass)
+    assert asyncio.run(driver_update.put(
+        DriverRequest({"driver": "person.alice"}, user_id="user-alice"),
+        "trip", "trip-1",
+    )) == {"driver": "person.alice"}
+    trips_after_assignment = [dict(trip) for trip in store.trips]
+    assert asyncio.run(preview.get(
+        DriverRequest(admin=False, user_id="user-alice"), "trip-1",
+    ))["status_code"] == 403
+    assert asyncio.run(merge.post(
+        DriverRequest({"next_trip_id": "trip-2"}, user_id="user-alice"), "trip-1",
+    ))["status_code"] == 403
+    assert store.trips == trips_after_assignment
+    assert store.merge_calls == []
     assert asyncio.run(preview.get(DriverRequest(admin=True), "trip-1")) == {
         "trip_id": "trip-1", "next_trip_id": "trip-2", "trip": {"distance": 12},
     }
@@ -585,10 +615,10 @@ def test_trip_merge_routes_allow_admins_and_assigned_drivers_only() -> None:
     )) == {"trip_id": "trip-1", "next_trip_id": "trip-2"}
     assert asyncio.run(preview.get(
         DriverRequest(admin=False, user_id="user-alice"), "trip-1",
-    ))["trip_id"] == "trip-1"
+    ))["status_code"] == 403
     assert asyncio.run(merge.post(
         DriverRequest({"next_trip_id": "trip-2"}, user_id="user-alice"), "trip-1",
-    )) == {"trip_id": "trip-1", "next_trip_id": "trip-2"}
+    ))["status_code"] == 403
     assert asyncio.run(preview.get(
         DriverRequest(admin=False, user_id="user-bob"), "trip-1",
     ))["status_code"] == 403
@@ -600,6 +630,7 @@ def test_trip_merge_routes_allow_admins_and_assigned_drivers_only() -> None:
     assert asyncio.run(merge.post(
         DriverRequest({"next_trip_id": "wrong"}, admin=True), "trip-1",
     ))["status_code"] == 409
+    assert store.merge_calls == [("trip-1", "trip-2")]
     assert asyncio.run(merge.post(
         DriverRequest({}, admin=True), "trip-1",
     ))["status_code"] == 400
