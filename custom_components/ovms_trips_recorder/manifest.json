@@ -15,7 +15,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/serotonie/ovms-home-assistant-trips-recorder/issues",
   "requirements": [
-    "geopy>=2.3.0"
+    "geopy>=2.5.0"
   ],
   "version": "2.8.0"
 }
