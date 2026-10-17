@@ -38,6 +38,10 @@ class TripsRecorderPanel extends HTMLElement {
             if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
             if (field.matches?.("[data-category-trip]")) this.saveCategories(field);
         });
+        this.shadowRoot.addEventListener?.("click", (event) => {
+            const button = event.target.closest?.("[data-delete-trip]");
+            if (button) this.deleteTrip(button.dataset.deleteTrip);
+        });
         this.trips = [];
         this.drivers = [];
         this.driverControlsEnabled = false;
@@ -536,9 +540,6 @@ class TripsRecorderPanel extends HTMLElement {
         }
         this.shadowRoot.querySelector("#retry")?.addEventListener("click", () => this.loadTrips(this.failedRequest));
         this.shadowRoot.querySelector("#load-more")?.addEventListener("click", () => this.loadTrips({ append: true }));
-        this.shadowRoot.querySelectorAll("[data-delete-trip]").forEach((button) => {
-            button.addEventListener("click", () => this.deleteTrip(button.dataset.deleteTrip));
-        });
         if (!this.loading && !this.loadError && this.hasMore && typeof IntersectionObserver === "function") {
             const observer = new IntersectionObserver((entries) => {
                 if (this.paginationObserver === observer && entries.some((entry) => entry.isIntersecting) && !this.loadError) {
