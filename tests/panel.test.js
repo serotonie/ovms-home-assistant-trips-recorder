@@ -1152,6 +1152,35 @@ test("renderLeafletMaps() réutilise les cartes existantes au lieu d'en recréer
     );
 });
 
+test("the map follows Home Assistant dark-mode changes without recreating the map", async () => {
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
+    const container = {
+        dataset: { index: "0" },
+        classList: {
+            toggle(name, enabled) {
+                this[name] = enabled;
+            },
+        },
+    };
+    panel.shadowRoot.querySelectorAll = () => [container];
+    panel.filteredTrips = [{ vehicle: "OVMS", waypoints: [] }];
+    panel._hass = { themes: { darkMode: false } };
+    panel.initialized = true;
+    panel.locale = "en";
+
+    await panel.renderLeafletMaps();
+    assert.equal(container.classList["dark-map"], false);
+
+    panel.hass = { themes: { darkMode: true }, locale: { language: "en" } };
+    await panel._mapRenderQueue;
+    assert.equal(container.classList["dark-map"], true);
+
+    panel.hass = { themes: { darkMode: false }, locale: { language: "en" } };
+    await panel._mapRenderQueue;
+    assert.equal(container.classList["dark-map"], false);
+    assert.equal(fakeLeaflet.maps.length, 1);
+});
+
 test("renderLeafletMaps() ne crée pas de marqueurs quand le trajet n'a pas de point GPS", async () => {
     const { panel, fakeLeaflet } = createPanelWithFakeLeaflet();
     const container = { dataset: { index: "0" } };

@@ -84,11 +84,15 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     set hass(value) {
+        const wasDarkMode = Boolean(this._hass?.themes?.darkMode);
         this._hass = value;
         const locale = this.getLocale();
         if (this.initialized && locale !== this.locale) {
             this.locale = locale;
             this.render();
+        }
+        if (this.initialized && wasDarkMode !== Boolean(value?.themes?.darkMode)) {
+            this.updateMapTheme();
         }
         if (!this.initialized) {
             this.locale = locale;
@@ -671,6 +675,15 @@ class TripsRecorderPanel extends HTMLElement {
         return this.queueMapTask(() => this.renderLeafletMapsNow());
     }
 
+    updateMapTheme() {
+        return this.queueMapTask(() => {
+            const darkMode = Boolean(this._hass?.themes?.darkMode);
+            for (const entry of this.maps.values()) {
+                entry.container.classList?.toggle("dark-map", darkMode);
+            }
+        });
+    }
+
     // Both renderLeafletMapsNow() (creating/updating maps) and
     // destroyLeafletMaps() (tearing them down, e.g. from render()/disconnectedCallback())
     // are asynchronous/queued through here so that a destroy triggered by a
@@ -706,15 +719,17 @@ class TripsRecorderPanel extends HTMLElement {
             let entry = this.maps.get(container);
             if (!entry) {
                 const map = Leaflet.map(container, { attributionControl: true, zoomControl: true, scrollWheelZoom: false });
+                container.classList?.toggle("dark-map", Boolean(this._hass?.themes?.darkMode));
                 Leaflet.tileLayer(this.getTileUrl(), {
                     attribution: this.getTileAttribution(),
                     maxZoom: 19,
                 }).addTo(map);
                 const path = Leaflet.polyline(points, pathStyle).addTo(map);
-                entry = { map, path, startMarker: null, endMarker: null, points };
+                entry = { map, path, startMarker: null, endMarker: null, points, container };
                 this.maps.set(container, entry);
                 this.observeMapResize(container, entry);
             } else {
+                container.classList?.toggle("dark-map", Boolean(this._hass?.themes?.darkMode));
                 entry.path.setLatLngs(points);
                 entry.path.setStyle(pathStyle);
                 entry.points = points;

@@ -28,6 +28,7 @@ export function renderPanel(panel) {
         .trip { display: grid; grid-template-rows: auto 1fr; min-width: 0; height: 100%; }
         .trip-map { height: 240px; background: var(--secondary-background-color); border-bottom: 1px solid var(--divider-color); }
         .trip-map-canvas { display: block; width: 100%; height: 100%; }
+        .trip-map-canvas.dark-map .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
         .trip-details { display: flex; flex-direction: column; padding: 16px; }
         .trip-head, .trip-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
         .trip-head { align-items: flex-start; flex-wrap: wrap; }
