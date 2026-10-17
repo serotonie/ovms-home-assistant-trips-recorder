@@ -329,6 +329,29 @@ class TripCategoriesApiView(HomeAssistantView):
         return self.json({"categories": data["categories"]})
 
 
+class TripDeleteApiView(HomeAssistantView):
+    """Allow administrators to delete a trip."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/trips/{{trip_id}}"
+    name = f"api:{DOMAIN}:trip_delete"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def delete(self, request: web.Request, trip_id: str):
+        if not getattr(request.get("hass_user"), "is_admin", False):
+            return self.json_message("Administrator access required.", status_code=403)
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        try:
+            await store.async_delete_trip(trip_id)
+        except KeyError:
+            return self.json_message("Trip not found.", status_code=404)
+        return self.json({"deleted": True})
+
+
 async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the panel routes consumed by Home Assistant."""
     hass.http.register_view(TripsRecorderApiView(hass))
@@ -336,5 +359,6 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
     hass.http.register_view(DriverUpdateApiView(hass))
     hass.http.register_view(CategoriesApiView(hass))
     hass.http.register_view(TripCategoriesApiView(hass))
+    hass.http.register_view(TripDeleteApiView(hass))
     hass.http.register_view(TripsRecorderModuleView())
     hass.http.register_view(VehicleTripsApiView(hass))

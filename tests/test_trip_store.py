@@ -84,6 +84,75 @@ def test_save_notifies_without_broadcasting_all_trips() -> None:
     assert events == [(trip_store.TRIP_UPDATED_EVENT,)]
 
 
+def test_delete_trip_removes_completed_and_active_trips_and_persists() -> None:
+    completed = {"id": "completed"}
+    active = {"id": "active"}
+    store = TripStore.__new__(TripStore)
+    store._data = {"trips": [completed], "active": {"car": active}}
+    store._vehicles = {"car": {"trip": active}}
+    store._timeout_tasks = {}
+    saves = []
+    cancelled = []
+
+    async def save() -> None:
+        saves.append(True)
+
+    store.async_save = save
+    store._cancel_timeout = cancelled.append
+
+    async def delete_trips() -> None:
+        await store.async_delete_trip("completed")
+        await store.async_delete_trip("active")
+
+    asyncio.run(delete_trips())
+
+    assert store._data == {"trips": [], "active": {}}
+    assert store._vehicles["car"]["trip"] is None
+    assert cancelled == ["car"]
+    assert len(saves) == 2
+
+
+def test_delete_trip_during_stop_does_not_restore_deleted_trip() -> None:
+    trip = {"id": "active", "waypoints": []}
+    state = {
+        "trip": trip,
+        "timestamp": "2026-09-25T11:37:29+00:00",
+        "latitude": 46.6,
+        "longitude": 6.4,
+        "distance": 1,
+    }
+    store = TripStore.__new__(TripStore)
+    store._vehicles = {"car": state}
+    store._data = {"trips": [], "active": {"car": trip}}
+    store._stopping_vehicle_ids = set()
+    store._timeout_tasks = {}
+    geocoding = asyncio.Event()
+    continue_geocoding = asyncio.Event()
+
+    async def geocode_trip(_trip) -> None:
+        geocoding.set()
+        await continue_geocoding.wait()
+
+    async def save() -> None:
+        pass
+
+    store._async_geocode_trip = geocode_trip
+    store.async_save = save
+    store._cancel_timeout = lambda _vehicle_id: None
+
+    async def stop_and_delete() -> None:
+        stopping = asyncio.create_task(store._async_stop_trip("car"))
+        await geocoding.wait()
+        await store.async_delete_trip("active")
+        continue_geocoding.set()
+        await stopping
+
+    asyncio.run(stop_and_delete())
+
+    assert store._data == {"trips": [], "active": {}}
+    assert state["trip"] is None
+
+
 def test_ovms_entries_map_directly_to_vehicle_ids() -> None:
     """Vehicle lookup uses the parent integration's config entries."""
     entries = [

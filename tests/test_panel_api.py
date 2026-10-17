@@ -486,6 +486,41 @@ def test_category_api_handles_bad_json_unknown_trip_and_missing_storage() -> Non
     assert asyncio.run(panel.CategoriesApiView(FakeHass(None)).get(None))["status_code"] == 503
 
 
+class DeleteStore(FakeStore):
+    def __init__(self):
+        super().__init__([{"id": "trip-1"}])
+        self.deleted = []
+
+    async def async_delete_trip(self, trip_id):
+        if trip_id != "trip-1":
+            raise KeyError(trip_id)
+        self.deleted.append(trip_id)
+
+
+def test_trip_delete_route_is_authenticated_and_registered() -> None:
+    hass = FakeHass(DeleteStore())
+    views = []
+    hass.http = types.SimpleNamespace(register_view=views.append)
+    asyncio.run(panel.async_setup_panel(hass))
+
+    view = next(view for view in views if isinstance(view, panel.TripDeleteApiView))
+    assert view.url == "/api/ovms_trips_recorder/trips/{trip_id}"
+    assert view.requires_auth is True
+
+
+def test_trip_delete_requires_admin_and_reports_store_results() -> None:
+    store = DeleteStore()
+    view = panel.TripDeleteApiView(FakeHass(store))
+    assert asyncio.run(view.delete(DriverRequest(admin=False), "trip-1"))["status_code"] == 403
+    assert store.deleted == []
+    assert asyncio.run(view.delete(DriverRequest(admin=True), "trip-1")) == {"deleted": True}
+    assert store.deleted == ["trip-1"]
+    assert asyncio.run(view.delete(DriverRequest(admin=True), "missing"))["status_code"] == 404
+    assert asyncio.run(panel.TripDeleteApiView(FakeHass(None)).delete(
+        DriverRequest(admin=True), "trip-1",
+    ))["status_code"] == 503
+
+
 @pytest.mark.parametrize("query,expected", [
     ({"driver": "person.alice"}, [3, 1]),
     ({"category": "Work"}, [2, 1]),

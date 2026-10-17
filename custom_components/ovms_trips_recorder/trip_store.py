@@ -242,6 +242,27 @@ class TripStore:
         await self.async_save()
         return trip
 
+    async def async_delete_trip(self, trip_id: str) -> None:
+        """Delete one completed or active trip and persist the change."""
+        trips = self._data.setdefault("trips", [])
+        for index, trip in enumerate(trips):
+            if trip.get("id") == trip_id:
+                del trips[index]
+                await self.async_save()
+                return
+
+        active = self._data.setdefault("active", {})
+        for vehicle_id, trip in list(active.items()):
+            if trip.get("id") == trip_id:
+                active.pop(vehicle_id)
+                state = self._vehicles.get(vehicle_id)
+                if state is not None and state.get("trip") is trip:
+                    state["trip"] = None
+                self._cancel_timeout(vehicle_id)
+                await self.async_save()
+                return
+        raise KeyError(trip_id)
+
     def get_drivers(self) -> list[dict[str, str]]:
         """List person entities, including people currently away or unavailable."""
         return sorted(
@@ -424,6 +445,8 @@ class TripStore:
             trip["stop_point_long"] = state["longitude"]
             trip["distance"] = state["distance"]
             await self._async_geocode_trip(trip)
+            if state["trip"] is not trip:
+                return
             self._data["trips"].append(trip)
             self._data["active"].pop(vehicle_id, None)
             state["trip"] = None

@@ -166,7 +166,7 @@ function createPanelWithFakeLeaflet(options = {}) {
     const TripsRecorderPanel = loadPanelModule({
         customElements,
         document: { createElement: () => ({}) },
-        window: {},
+        window: options.window || {},
         ResizeObserver: options.ResizeObserver,
     });
     const panel = new TripsRecorderPanel();
@@ -265,6 +265,55 @@ test("editing a driver uses authenticated API and refreshes without dropping loa
     ]);
     assert.equal(panel.savingDriver, false);
     assert.equal(panel.driverError, "");
+});
+
+test("trip deletion is admin-only, confirmed, and refreshes the list", async () => {
+    const calls = [];
+    const { panel } = createPanelWithFakeLeaflet({
+        window: { confirm: () => true },
+    });
+    panel._hass = {
+        user: { is_admin: true },
+        async callApi(...args) { calls.push(args); },
+    };
+    panel.loadTrips = async (options) => calls.push(options);
+
+    await panel.deleteTrip("trip /1");
+
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["DELETE", "ovms_trips_recorder/trips/trip%20%2F1"],
+        { refresh: true },
+    ]);
+    assert.equal(panel.deletingTripId, null);
+    assert.equal(panel.deleteError, "");
+    assert.match(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip="trip-1"/);
+    panel._hass.user.is_admin = false;
+    assert.doesNotMatch(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip/);
+});
+
+test("trip deletion respects cancellation and reports failures", async () => {
+    let calls = 0;
+    let confirmed = false;
+    const { panel } = createPanelWithFakeLeaflet({
+        window: { confirm: () => confirmed },
+    });
+    panel._hass = {
+        user: { is_admin: true },
+        async callApi() {
+            calls++;
+            throw new Error("HTTP 500");
+        },
+    };
+    await panel.deleteTrip("trip-1");
+    assert.equal(calls, 0);
+
+    confirmed = true;
+    panel._hass.user.is_admin = false;
+    await panel.deleteTrip("trip-1");
+    assert.equal(panel.deleteError, "");
+    panel._hass.user.is_admin = true;
+    await panel.deleteTrip("trip-1");
+    assert.match(panel.deleteError, /Unable to delete the trip/);
 });
 
 test("driver visibility is controlled by integration options, not a panel toggle", async () => {

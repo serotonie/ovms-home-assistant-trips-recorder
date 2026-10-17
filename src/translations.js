@@ -37,6 +37,9 @@ Object.assign(TRANSLATIONS.en, {
     noDrivers: "No people available. Add people in Home Assistant Settings > People.",
     driverLoadError: "Unable to load drivers. Refresh the panel to retry.",
     driverSaveError: "Unable to save the driver. Please try again.",
+    deleteTrip: "Delete trip",
+    confirmDeleteTrip: "Permanently delete this trip?",
+    deleteTripError: "Unable to delete the trip. Please try again.",
 });
 Object.assign(TRANSLATIONS.fr, {
     allDrivers: "Tous les conducteurs",
@@ -53,6 +56,9 @@ Object.assign(TRANSLATIONS.fr, {
     noDrivers: "Aucune personne disponible. Ajoutez des personnes dans Paramètres > Personnes de Home Assistant.",
     driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
     driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer.",
+    deleteTrip: "Supprimer le trajet",
+    confirmDeleteTrip: "Supprimer définitivement ce trajet ?",
+    deleteTripError: "Impossible de supprimer le trajet. Veuillez réessayer.",
 });
 
 const PAGINATION_TRANSLATIONS = {

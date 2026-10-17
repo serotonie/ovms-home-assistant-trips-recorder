@@ -86,7 +86,7 @@
         .dot.stop { background: var(--accent-color); }
         .address { display: grid; gap: 4px; min-width: 0; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); line-height: 1.45; }
         .address strong { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
-        .trip-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
+        .trip-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--divider-color); color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); }
         .distance { color: var(--primary-text-color); font-size: var(--ha-font-size-l, 20px); font-weight: 600; }
         .empty { padding: 48px 18px; color: var(--secondary-text-color); text-align: center; }
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
@@ -145,7 +145,7 @@
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${panel._hass?.user?.is_admin && trip.id ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}</div>
                 `;
 	}
 	function renderTripCategories(panel, trip) {
@@ -162,6 +162,7 @@
 	function renderDriverSettings(panel) {
 		return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
         ${panel.categoryError ? `<p class="driver-warning" role="alert">${panel.escape(panel.categoryError)}</p>` : ""}
+        ${panel.deleteError ? `<p class="driver-warning" role="alert">${panel.escape(panel.deleteError)}</p>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 	}
 	function renderMap(index) {
@@ -549,7 +550,10 @@
 		driverUnavailable: "Person unavailable",
 		noDrivers: "No people available. Add people in Home Assistant Settings > People.",
 		driverLoadError: "Unable to load drivers. Refresh the panel to retry.",
-		driverSaveError: "Unable to save the driver. Please try again."
+		driverSaveError: "Unable to save the driver. Please try again.",
+		deleteTrip: "Delete trip",
+		confirmDeleteTrip: "Permanently delete this trip?",
+		deleteTripError: "Unable to delete the trip. Please try again."
 	});
 	Object.assign(TRANSLATIONS.fr, {
 		allDrivers: "Tous les conducteurs",
@@ -565,7 +569,10 @@
 		driverUnavailable: "Personne indisponible",
 		noDrivers: "Aucune personne disponible. Ajoutez des personnes dans Paramètres > Personnes de Home Assistant.",
 		driverLoadError: "Impossible de charger les conducteurs. Actualisez le panneau pour réessayer.",
-		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer."
+		driverSaveError: "Impossible d'enregistrer le conducteur. Veuillez réessayer.",
+		deleteTrip: "Supprimer le trajet",
+		confirmDeleteTrip: "Supprimer définitivement ce trajet ?",
+		deleteTripError: "Impossible de supprimer le trajet. Veuillez réessayer."
 	});
 	for (const [language, [loadMore, loading, retry]] of Object.entries({
 		en: [
@@ -7447,11 +7454,17 @@
 				if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
 				if (field.matches?.("[data-category-trip]")) this.saveCategories(field);
 			});
+			this.shadowRoot.addEventListener?.("click", (event) => {
+				const button = event.target.closest?.("[data-delete-trip]");
+				if (button) this.deleteTrip(button.dataset.deleteTrip);
+			});
 			this.trips = [];
 			this.drivers = [];
 			this.driverControlsEnabled = false;
 			this.driverError = "";
 			this.savingDriver = false;
+			this.deleteError = "";
+			this.deletingTripId = null;
 			this.categories = [];
 			this.categoryControlsEnabled = false;
 			this.categoryError = "";
@@ -7704,6 +7717,24 @@
 				this.driverError = this.t("driverSaveError");
 			} finally {
 				this.savingDriver = false;
+				this.updateTripDetails();
+				this.updateDriverSettings();
+			}
+		}
+		async deleteTrip(tripId) {
+			if (!this._hass?.user?.is_admin || !tripId || this.deletingTripId) return;
+			if (typeof window.confirm === "function" && !window.confirm(this.t("confirmDeleteTrip"))) return;
+			this.deletingTripId = tripId;
+			this.deleteError = "";
+			this.updateTripDetails();
+			try {
+				await this._hass.callApi("DELETE", `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}`);
+				await this.loadTrips({ refresh: true });
+			} catch (error) {
+				console.error("Failed to delete trip", error);
+				this.deleteError = this.t("deleteTripError");
+			} finally {
+				this.deletingTripId = null;
 				this.updateTripDetails();
 				this.updateDriverSettings();
 			}

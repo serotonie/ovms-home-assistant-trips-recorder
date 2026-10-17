@@ -38,11 +38,17 @@ class TripsRecorderPanel extends HTMLElement {
             if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
             if (field.matches?.("[data-category-trip]")) this.saveCategories(field);
         });
+        this.shadowRoot.addEventListener?.("click", (event) => {
+            const button = event.target.closest?.("[data-delete-trip]");
+            if (button) this.deleteTrip(button.dataset.deleteTrip);
+        });
         this.trips = [];
         this.drivers = [];
         this.driverControlsEnabled = false;
         this.driverError = "";
         this.savingDriver = false;
+        this.deleteError = "";
+        this.deletingTripId = null;
         this.categories = [];
         this.categoryControlsEnabled = false;
         this.categoryError = "";
@@ -329,6 +335,28 @@ class TripsRecorderPanel extends HTMLElement {
             this.driverError = this.t("driverSaveError");
         } finally {
             this.savingDriver = false;
+            this.updateTripDetails();
+            this.updateDriverSettings();
+        }
+    }
+
+    async deleteTrip(tripId) {
+        if (!this._hass?.user?.is_admin || !tripId || this.deletingTripId) return;
+        if (typeof window.confirm === "function" && !window.confirm(this.t("confirmDeleteTrip"))) return;
+        this.deletingTripId = tripId;
+        this.deleteError = "";
+        this.updateTripDetails();
+        try {
+            await this._hass.callApi(
+                "DELETE",
+                `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}`,
+            );
+            await this.loadTrips({ refresh: true });
+        } catch (error) {
+            console.error("Failed to delete trip", error);
+            this.deleteError = this.t("deleteTripError");
+        } finally {
+            this.deletingTripId = null;
             this.updateTripDetails();
             this.updateDriverSettings();
         }
