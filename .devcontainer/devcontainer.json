@@ -4,7 +4,7 @@
     "service": "dev",
     "workspaceFolder": "/workspaces/ovms-home-assistant-trips-recorder",
     "features": {
-        "ghcr.io/devcontainers/features/node:1": {
+        "ghcr.io/devcontainers/features/node:2": {
             "version": "24"
         },
         "ghcr.io/devcontainers/features/github-cli:1": {},

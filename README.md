@@ -207,7 +207,11 @@ Assistant installation.
 ### Using the VS Code Dev Container
 
 The repository also provides a configuration compatible with the VS Code **Dev
-Containers** extension:
+Containers** extension.
+
+The development container uses the Python 3.13 / Debian Trixie image (image major
+3) and the Node feature v2 with Node.js 24. After updating the container
+configuration, run **Dev Containers: Rebuild Container** to apply the updates.
 
 1. Install the `Dev Containers` extension;
 2. open this repository in VS Code;

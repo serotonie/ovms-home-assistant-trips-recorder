@@ -1,6 +1,6 @@
 services:
   dev:
-    image: mcr.microsoft.com/devcontainers/python:2-3.13-trixie
+    image: mcr.microsoft.com/devcontainers/python:3-3.13-trixie
     command: sleep infinity
     working_dir: /workspaces/ovms-home-assistant-trips-recorder
     volumes:
