@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
@@ -254,3 +255,11 @@ def test_deleted_defaults_are_preserved_and_can_be_replaced(integration):
     for selected in ({"old-car": "person.deleted"}, {"old-car": "person.alice"}, {}):
         result = asyncio.run(flow.async_step_init({OPTION: True, "driver_defaults": selected}))
         assert result["data"]["driver_defaults"] == selected
+
+
+def test_options_translation_errors_use_home_assistant_schema():
+    for path in [COMPONENT / "strings.json", *sorted((COMPONENT / "translations").glob("*.json"))]:
+        options = json.loads(path.read_text())["options"]
+        assert "invalid_driver" in options["error"]
+        assert "driver_defaults" in options["step"]["init"]["data"]
+        assert "error" not in options["step"]["init"]

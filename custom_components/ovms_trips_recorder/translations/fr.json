@@ -7,11 +7,11 @@
         "data": {
           "driver_controls_enabled": "Afficher les conducteurs",
           "driver_defaults": "Conducteurs par défaut par véhicule"
-        },
-        "error": {
-          "invalid_driver": "Choisissez une personne existante dans Home Assistant pour chaque véhicule."
         }
       }
+    },
+    "error": {
+      "invalid_driver": "Choisissez une personne existante dans Home Assistant pour chaque véhicule."
     }
   }
 }
