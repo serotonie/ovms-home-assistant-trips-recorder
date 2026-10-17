@@ -2,16 +2,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "Trip driver settings",
-        "description": "Choose whether driver controls are shown in the Trips panel and select a default person for each vehicle. Defaults apply to new trips and backfill trips without a driver, even when controls are hidden. Clear a vehicle's selection to remove its default; assigned trips are not changed.",
+        "title": "Trip settings",
+        "description": "Configure optional driver and category controls. Only administrators can define the available category names. Use unique, non-empty names without surrounding spaces. Removed categories remain on previously categorized trips. Defaults continue to apply while controls are hidden; assigned trips are not overwritten. On the next page, select category defaults per vehicle.",
         "data": {
           "driver_controls_enabled": "Show driver controls",
-          "driver_defaults": "Default drivers per vehicle"
+          "driver_defaults": "Default drivers per vehicle",
+          "category_controls_enabled": "Show category controls",
+          "categories": "Available categories"
+        }
+      },
+      "category_defaults": {
+        "title": "Default categories per vehicle",
+        "description": "Select one or more categories for each vehicle. Defaults apply to new trips and backfill trips without categories, even when controls are hidden. Clear a selection to remove that vehicle's default without changing categorized trips.",
+        "data": {
+          "category_defaults": "Default categories per vehicle"
         }
       }
     },
     "error": {
-      "invalid_driver": "Choose an existing Home Assistant person for each vehicle."
+      "invalid_driver": "Choose an existing Home Assistant person for each vehicle.",
+      "invalid_categories": "Use unique, non-empty category names without surrounding spaces.",
+      "invalid_category_defaults": "Select only categories from the available list for known vehicles."
     }
   }
 }

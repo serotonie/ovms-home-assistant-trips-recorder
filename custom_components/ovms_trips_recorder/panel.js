@@ -92,6 +92,9 @@
         .pagination-error { color: var(--error-color); }
         .driver-settings { margin-bottom: 24px; }
         .trip-driver { margin-block: 12px; }
+        .trip-categories { margin: 12px 0; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px; }
+        .category-choice { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
+        .category-choice input { width: auto; min-height: auto; }
         .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
@@ -134,6 +137,7 @@
                 <select data-driver-kind="trip" data-driver-target="${panel.escape(trip.id || "")}" ${!trip.id || !panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(trip.driver)}</select>
             </label>
             ${!trip.driver ? `<span class="driver-warning">${panel.escape(panel.t("driverNotSet"))}</span>` : ""}` : ""}
+            ${renderTripCategories(panel, trip)}
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
@@ -142,8 +146,20 @@
             <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span></div>
                 `;
 	}
+	function renderTripCategories(panel, trip) {
+		if (!panel.categoryControlsEnabled) return "";
+		const selected = trip.categories || [];
+		const choices = [.../* @__PURE__ */ new Set([...panel.categories, ...selected])];
+		return `<fieldset class="trip-categories" ${!trip.id || panel.savingCategories ? "disabled" : ""}>
+        <legend>${panel.escape(panel.t("categories"))}</legend>
+        ${!choices.length ? `<span>${panel.escape(panel.t("noCategories"))}</span>` : choices.map((category) => `<label class="category-choice"><input type="checkbox" data-category-trip="${panel.escape(trip.id || "")}" value="${panel.escape(category)}" ${selected.includes(category) ? "checked" : ""}>
+            <span>${panel.escape(category)}${!panel.categories.includes(category) ? ` (${panel.escape(panel.t("categoryRetired"))})` : ""}</span>
+        </label>`).join("")}
+    </fieldset>`;
+	}
 	function renderDriverSettings(panel) {
 		return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
+        ${panel.categoryError ? `<p class="driver-warning" role="alert">${panel.escape(panel.categoryError)}</p>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 	}
 	function renderMap(index) {
@@ -518,6 +534,11 @@
 		}
 	};
 	Object.assign(TRANSLATIONS.en, {
+		categories: "Categories",
+		noCategories: "No categories defined. An administrator can add them in the integration settings.",
+		categoryRetired: "removed category",
+		categoryLoadError: "Unable to load categories. Refresh the panel to retry.",
+		categorySaveError: "Unable to save categories. Please try again.",
 		driver: "Driver",
 		driverNotSet: "Driver not set",
 		driverUnavailable: "Person unavailable",
@@ -526,6 +547,11 @@
 		driverSaveError: "Unable to save the driver. Please try again."
 	});
 	Object.assign(TRANSLATIONS.fr, {
+		categories: "Catégories",
+		noCategories: "Aucune catégorie définie. Un administrateur peut en ajouter dans les paramètres de l'intégration.",
+		categoryRetired: "catégorie supprimée",
+		categoryLoadError: "Impossible de charger les catégories. Actualisez le panneau pour réessayer.",
+		categorySaveError: "Impossible d'enregistrer les catégories. Veuillez réessayer.",
 		driver: "Conducteur",
 		driverNotSet: "Conducteur non défini",
 		driverUnavailable: "Personne indisponible",
@@ -7433,12 +7459,17 @@
 			this.shadowRoot.addEventListener?.("change", (event) => {
 				const field = event.target;
 				if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
+				if (field.matches?.("[data-category-trip]")) this.saveCategories(field);
 			});
 			this.trips = [];
 			this.drivers = [];
 			this.driverControlsEnabled = false;
 			this.driverError = "";
 			this.savingDriver = false;
+			this.categories = [];
+			this.categoryControlsEnabled = false;
+			this.categoryError = "";
+			this.savingCategories = false;
 			this.vehicles = [];
 			this.filteredTrips = [];
 			this.filters = {
@@ -7576,7 +7607,7 @@
 				this.hasMore = data.has_more;
 				this.nextOffset = data.next_offset;
 				this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
-				await this.loadDriverSettings();
+				await Promise.all([this.loadDriverSettings(), this.loadCategorySettings()]);
 				if (generation !== this.requestGeneration) return;
 				this.updateTrips(trips, { prefiltered: true });
 			} catch (error) {
@@ -7614,6 +7645,49 @@
 		updateDriverSettings() {
 			const settings = this.shadowRoot.querySelector("#driver-settings");
 			if (settings) settings.innerHTML = renderDriverSettings(this);
+		}
+		async loadCategorySettings() {
+			if (!this._hass?.callApi) return;
+			try {
+				const data = await this._hass.callApi("GET", "ovms_trips_recorder/categories");
+				if (typeof data.enabled !== "boolean" || !Array.isArray(data.categories) || !data.categories.every((category) => typeof category === "string")) throw new Error("Invalid category settings response");
+				this.categories = data.categories;
+				this.categoryControlsEnabled = data.enabled;
+				this.categoryError = "";
+			} catch (error) {
+				console.error("Failed to load categories", error);
+				this.categoryError = this.t("categoryLoadError");
+			}
+			this.updateDriverSettings();
+		}
+		async saveCategories(field) {
+			if (this.savingCategories) return;
+			const trip = this.trips.find((item) => item.id === field.dataset.categoryTrip);
+			if (!trip) {
+				console.error("Cannot categorize a trip that is no longer loaded");
+				this.categoryError = this.t("categorySaveError");
+				this.updateDriverSettings();
+				return;
+			}
+			const selected = new Set(trip.categories || []);
+			if (field.checked) selected.add(field.value);
+			else selected.delete(field.value);
+			this.savingCategories = true;
+			this.shadowRoot.querySelectorAll("[data-category-trip]").forEach((input) => {
+				input.disabled = true;
+			});
+			try {
+				await this._hass.callApi("PUT", `ovms_trips_recorder/categories/trip/${encodeURIComponent(trip.id)}`, { categories: [...selected] });
+				this.categoryError = "";
+				await this.loadTrips({ refresh: true });
+			} catch (error) {
+				console.error("Failed to save trip categories", error);
+				this.categoryError = this.t("categorySaveError");
+			} finally {
+				this.savingCategories = false;
+				this.updateTripDetails();
+				this.updateDriverSettings();
+			}
 		}
 		driverOptions(selected) {
 			const missing = selected && !this.drivers.some((driver) => driver.id === selected);

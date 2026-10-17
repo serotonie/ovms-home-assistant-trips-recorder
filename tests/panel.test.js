@@ -304,6 +304,70 @@ test("driver load and save failures are visible and do not claim success", async
     assert.equal(panel.savingDriver, false);
 });
 
+test("category controls are opt-in, escaped, multi-select and preserve retired selections", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    const trip = { id: "trip-1", categories: ["Work", "<Retired>"] };
+    assert.doesNotMatch(panel.renderTripDetails(trip), /trip-categories/);
+    panel.categoryControlsEnabled = true;
+    panel.categories = ["Work", 'Personal & "fun"'];
+    const html = panel.renderTripDetails(trip);
+    assert.match(html, /<fieldset class="trip-categories"/);
+    assert.match(html, /data-category-trip="trip-1" value="Work" checked/);
+    assert.match(html, /Personal &amp; &quot;fun&quot;/);
+    assert.match(html, /&lt;Retired&gt; \(removed category\)/);
+    assert.doesNotMatch(html, /<Retired>|data-category-definition/);
+    panel.categories = [];
+    assert.match(panel.renderTripDetails({ id: "new" }), /No categories defined/);
+    panel.locale = "fr";
+    assert.match(panel.renderTripDetails(trip), /Catégories/);
+});
+
+test("category settings load through authenticated API and update visibility", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    const calls = [];
+    panel._hass = { async callApi(...args) {
+        calls.push(args);
+        return { enabled: true, categories: ["Work"], defaults: {} };
+    } };
+    await panel.loadCategorySettings();
+    assert.deepEqual(calls, [["GET", "ovms_trips_recorder/categories"]]);
+    assert.equal(panel.categoryControlsEnabled, true);
+    assert.equal(panel.categories[0], "Work");
+    assert.equal(panel.categoryError, "");
+});
+
+test("category checkbox changes preserve multiple choices and use trip API", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel.trips = [{ id: "trip /1", categories: ["Work"] }];
+    const calls = [];
+    panel._hass = { async callApi(...args) { calls.push(args); } };
+    panel.loadTrips = async (options) => { calls.push(options); };
+    await panel.saveCategories({ dataset: { categoryTrip: "trip /1" }, value: "Personal", checked: true });
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+        ["PUT", "ovms_trips_recorder/categories/trip/trip%20%2F1", { categories: ["Work", "Personal"] }],
+        { refresh: true },
+    ]);
+    calls.length = 0;
+    await panel.saveCategories({ dataset: { categoryTrip: "trip /1" }, value: "Work", checked: false });
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0][2])), { categories: [] });
+    assert.equal(panel.savingCategories, false);
+});
+
+test("category failures stay visible and rejected edits do not change loaded assignments", async () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { async callApi() { throw new Error("HTTP 400"); } };
+    await panel.loadCategorySettings();
+    assert.match(panel.categoryError, /Unable to load categories/);
+    panel.trips = [{ id: "trip", categories: ["Work"] }];
+    let refreshed = false;
+    panel.loadTrips = async () => { refreshed = true; };
+    await panel.saveCategories({ dataset: { categoryTrip: "trip" }, value: "Invented", checked: true });
+    assert.equal(panel.trips[0].categories.join(), "Work");
+    assert.equal(refreshed, false);
+    assert.match(panel.categoryError, /Unable to save categories/);
+    assert.equal(panel.savingCategories, false);
+});
+
 test("pagination defaults to 10, appends without rebuilding existing cards, and stops at the end", async () => {
     const requests = [];
     const { panel, nodes } = createPaginationPanel(async (url) => {

@@ -36,12 +36,17 @@ class TripsRecorderPanel extends HTMLElement {
         this.shadowRoot.addEventListener?.("change", (event) => {
             const field = event.target;
             if (field.matches?.("[data-driver-kind]")) this.saveDriver(field);
+            if (field.matches?.("[data-category-trip]")) this.saveCategories(field);
         });
         this.trips = [];
         this.drivers = [];
         this.driverControlsEnabled = false;
         this.driverError = "";
         this.savingDriver = false;
+        this.categories = [];
+        this.categoryControlsEnabled = false;
+        this.categoryError = "";
+        this.savingCategories = false;
         this.vehicles = [];
         this.filteredTrips = [];
         this.filters = { from: "", to: "", vehicle: "" };
@@ -195,7 +200,7 @@ class TripsRecorderPanel extends HTMLElement {
             this.hasMore = data.has_more;
             this.nextOffset = data.next_offset;
             this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
-            await this.loadDriverSettings();
+            await Promise.all([this.loadDriverSettings(), this.loadCategorySettings()]);
             if (generation !== this.requestGeneration) return;
             this.updateTrips(trips, { prefiltered: true });
         } catch (error) {
@@ -236,6 +241,58 @@ class TripsRecorderPanel extends HTMLElement {
     updateDriverSettings() {
         const settings = this.shadowRoot.querySelector("#driver-settings");
         if (settings) settings.innerHTML = renderDriverSettings(this);
+    }
+
+    async loadCategorySettings() {
+        if (!this._hass?.callApi) return;
+        try {
+            const data = await this._hass.callApi("GET", "ovms_trips_recorder/categories");
+            if (typeof data.enabled !== "boolean" || !Array.isArray(data.categories) ||
+                !data.categories.every((category) => typeof category === "string")) {
+                throw new Error("Invalid category settings response");
+            }
+            this.categories = data.categories;
+            this.categoryControlsEnabled = data.enabled;
+            this.categoryError = "";
+        } catch (error) {
+            console.error("Failed to load categories", error);
+            this.categoryError = this.t("categoryLoadError");
+        }
+        this.updateDriverSettings();
+    }
+
+    async saveCategories(field) {
+        if (this.savingCategories) return;
+        const trip = this.trips.find((item) => item.id === field.dataset.categoryTrip);
+        if (!trip) {
+            console.error("Cannot categorize a trip that is no longer loaded");
+            this.categoryError = this.t("categorySaveError");
+            this.updateDriverSettings();
+            return;
+        }
+        const selected = new Set(trip.categories || []);
+        if (field.checked) selected.add(field.value);
+        else selected.delete(field.value);
+        this.savingCategories = true;
+        this.shadowRoot.querySelectorAll("[data-category-trip]").forEach((input) => {
+            input.disabled = true;
+        });
+        try {
+            await this._hass.callApi(
+                "PUT",
+                `ovms_trips_recorder/categories/trip/${encodeURIComponent(trip.id)}`,
+                { categories: [...selected] },
+            );
+            this.categoryError = "";
+            await this.loadTrips({ refresh: true });
+        } catch (error) {
+            console.error("Failed to save trip categories", error);
+            this.categoryError = this.t("categorySaveError");
+        } finally {
+            this.savingCategories = false;
+            this.updateTripDetails();
+            this.updateDriverSettings();
+        }
     }
 
     driverOptions(selected) {
