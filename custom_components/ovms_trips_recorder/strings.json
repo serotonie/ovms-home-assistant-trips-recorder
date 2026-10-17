@@ -1,0 +1,13 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Trip driver settings",
+        "description": "Choose whether driver controls are shown in the Trips panel. Automatic assignment using saved per-vehicle defaults continues when controls are hidden.",
+        "data": {
+          "driver_controls_enabled": "Show driver controls"
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_DRIVER_CONTROLS_ENABLED,
     DATA_SETUP_COMPLETE,
     DATA_TRIP_STORE,
     DOMAIN,
@@ -49,6 +50,17 @@ async def _async_setup_integration(
         await store.async_load()
         hass.data[DOMAIN][DATA_TRIP_STORE] = store
 
+        if config_entry is not None:
+            if CONF_DRIVER_CONTROLS_ENABLED not in config_entry.options:
+                hass.config_entries.async_update_entry(
+                    config_entry,
+                    options={
+                        **config_entry.options,
+                        CONF_DRIVER_CONTROLS_ENABLED: store.driver_controls_enabled,
+                    },
+                )
+            await _async_update_options(hass, config_entry)
+
         if hass.is_running:
             await store.async_start()
         else:
@@ -80,7 +92,17 @@ async def _async_setup_integration(
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up the integration from a config entry if needed."""
-    return await _async_setup_integration(hass, entry)
+    result = await _async_setup_integration(hass, entry)
+    entry.async_on_unload(entry.add_update_listener(_async_update_options))
+    return result
+
+
+async def _async_update_options(hass: HomeAssistant, entry) -> None:
+    """Apply options immediately and notify open panels without reloading."""
+    store = hass.data[DOMAIN][DATA_TRIP_STORE]
+    enabled = entry.options.get(CONF_DRIVER_CONTROLS_ENABLED, False)
+    if store.driver_controls_enabled != enabled:
+        await store.async_set_driver_controls_enabled(enabled)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
