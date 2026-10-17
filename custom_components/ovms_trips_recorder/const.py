@@ -3,6 +3,7 @@
 DOMAIN = "ovms_trips_recorder"
 DATA_TRIP_STORE = "ovms_trips_recorder_trip_store"
 DATA_SETUP_COMPLETE = "ovms_trips_recorder_setup_complete"
+CONF_DRIVER_CONTROLS_ENABLED = "driver_controls_enabled"
 
 PANEL_TITLE = "Trips"
 PANEL_ICON = "mdi:map-marker-path"

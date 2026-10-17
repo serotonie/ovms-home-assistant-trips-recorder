@@ -43,7 +43,10 @@ without loading the entire history or recreating unchanged map containers.
 
 Drivers are Home Assistant **person entities**, not login accounts. Create them
 under **Settings > People**. Driver controls are **disabled by default**.
-Administrators can enable **Show driver controls** above the trip cards.
+Administrators can enable **Show driver controls** under **Settings > Devices &
+Services > OVMS Trips Recorder > Configure**. The switch is not in the Trips
+panel. Changes apply immediately to open panels without restarting Home Assistant.
+Upgrading from v2.6.0 preserves the previously saved switch value.
 When enabled, each trip card displays its driver and lets any
 authenticated user select a different person; changes are saved immediately,
 including for ongoing trips.
@@ -79,9 +82,9 @@ read APIs include these fields. Driver choices and writes require authentication
 
 Both writes accept `{"driver": "person.example"}`. Invalid people or bodies
 return 400, unknown targets return 404, and unavailable storage returns 503.
-Administrators can also
-`PUT /api/ovms_trips_recorder/drivers/settings/enabled` with `{"enabled": true}`
-or `{"enabled": false}` to toggle panel visibility. This is a UI preference;
+Panel visibility is managed only through the integration's options flow; the
+former `/drivers/settings/enabled` write endpoint is no longer available.
+This is a UI preference;
 authenticated driver API reads/writes remain available while controls are hidden.
 
 ## Structure

@@ -51,8 +51,6 @@ export function renderPanel(panel) {
         .driver-settings { margin-bottom: 24px; }
         .driver-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-block: 12px; }
         .trip-driver { margin-block: 12px; }
-        .driver-toggle { display: flex; align-items: center; gap: 8px; }
-        .driver-toggle input { width: auto; min-height: auto; }
         .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
         @media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }
@@ -115,7 +113,6 @@ export function renderTripDetails(panel, trip) {
 
 export function renderDriverSettings(panel) {
     return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
-        ${panel._hass?.user?.is_admin ? `<label class="driver-toggle"><input type="checkbox" data-driver-kind="settings" data-driver-target="enabled" ${panel.driverControlsEnabled ? "checked" : ""} ${panel.savingDriver ? "disabled" : ""}>${panel.escape(panel.t("enableDriverControls"))}</label>` : ""}
         ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}
         ${panel.driverControlsEnabled && panel._hass?.user?.is_admin ? `<details><summary>${panel.escape(panel.t("defaultDrivers"))}</summary>
             <p>${panel.escape(panel.t("defaultDriverHelp"))}</p>

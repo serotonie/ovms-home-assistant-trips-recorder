@@ -24,7 +24,6 @@ export const TRANSLATIONS = {
 
 Object.assign(TRANSLATIONS.en, {
     driver: "Driver",
-    enableDriverControls: "Show driver controls (automatic assignment continues when hidden)",
     driverNotSet: "Driver not set",
     driverUnavailable: "Person unavailable",
     defaultDrivers: "Default drivers per vehicle",
@@ -35,7 +34,6 @@ Object.assign(TRANSLATIONS.en, {
 });
 Object.assign(TRANSLATIONS.fr, {
     driver: "Conducteur",
-    enableDriverControls: "Afficher les conducteurs (l'attribution automatique continue lorsque masqués)",
     driverNotSet: "Conducteur non défini",
     driverUnavailable: "Personne indisponible",
     defaultDrivers: "Conducteurs par défaut par véhicule",

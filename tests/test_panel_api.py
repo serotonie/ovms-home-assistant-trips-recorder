@@ -416,22 +416,12 @@ def test_driver_writes_report_bad_json_unknown_target_and_unavailable_store() ->
     assert asyncio.run(panel.DriversApiView(FakeHass(None)).get(None))["status_code"] == 503
 
 
-@pytest.mark.parametrize("enabled", [True, False])
-def test_driver_visibility_switch_is_admin_only(enabled) -> None:
+@pytest.mark.parametrize("admin", [True, False])
+def test_driver_visibility_cannot_be_changed_through_panel_api(admin) -> None:
     store = DriverStore()
     view = panel.DriverUpdateApiView(FakeHass(store))
-    result = asyncio.run(view.put(DriverRequest({"enabled": enabled}), "settings", "enabled"))
-    assert result["status_code"] == 403
     result = asyncio.run(view.put(
-        DriverRequest({"enabled": enabled}, admin=True), "settings", "enabled",
+        DriverRequest({"enabled": True}, admin=admin), "settings", "enabled",
     ))
-    assert result == {"enabled": enabled}
-    assert store.driver_controls_enabled is enabled
-
-
-@pytest.mark.parametrize("body", [None, {}, {"enabled": "false"}, {"enabled": 1}])
-def test_driver_visibility_rejects_non_boolean_values(body) -> None:
-    view = panel.DriverUpdateApiView(FakeHass(DriverStore()))
-    assert asyncio.run(view.put(
-        DriverRequest(body, admin=True), "settings", "enabled",
-    ))["status_code"] == 400
+    assert result["status_code"] == 404
+    assert store.driver_controls_enabled is False

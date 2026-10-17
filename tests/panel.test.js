@@ -267,7 +267,7 @@ test("editing a driver uses authenticated API and refreshes without dropping loa
     assert.equal(panel.driverError, "");
 });
 
-test("driver controls default to hidden and only admins can see the toggle", async () => {
+test("driver visibility is controlled by integration options, not a panel toggle", async () => {
     const { panel } = createPanelWithFakeLeaflet();
     assert.equal(panel.driverControlsEnabled, false);
     assert.doesNotMatch(panel.renderTripDetails({ id: "trip", driver: "person.alice" }), /trip-driver|driver-warning/);
@@ -278,15 +278,19 @@ test("driver controls default to hidden and only admins can see the toggle", asy
     assert.doesNotMatch(settings.innerHTML, /data-driver-kind|No people/);
     panel._hass.user.is_admin = true;
     panel.updateDriverSettings();
-    assert.match(settings.innerHTML, /type="checkbox" data-driver-kind="settings"/);
-    assert.doesNotMatch(settings.innerHTML, /data-driver-kind="vehicle"|checked/);
-    const calls = [];
-    panel._hass.callApi = async (...args) => calls.push(args);
-    panel.loadTrips = async () => {};
-    await panel.saveDriver({ dataset: { driverKind: "settings", driverTarget: "enabled" }, checked: true });
-    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
-        ["PUT", "ovms_trips_recorder/drivers/settings/enabled", { enabled: true }],
-    ]);
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind|type="checkbox"/);
+    panel._hass.callApi = async () => ({
+        enabled: true, drivers: [{ id: "person.alice", name: "Alice" }],
+        defaults: {}, vehicles: ["car"],
+    });
+    await panel.loadDriverSettings();
+    assert.match(panel.renderTripDetails({ id: "trip" }), /trip-driver/);
+    assert.match(settings.innerHTML, /data-driver-kind="vehicle"/);
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind="settings"|type="checkbox"/);
+    panel._hass.callApi = async () => ({ enabled: false, drivers: [], defaults: {}, vehicles: [] });
+    await panel.loadDriverSettings();
+    assert.doesNotMatch(panel.renderTripDetails({ id: "trip" }), /trip-driver|driver-warning/);
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind/);
 });
 
 test("driver load and save failures are visible and do not claim success", async () => {

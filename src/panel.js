@@ -268,7 +268,7 @@ class TripsRecorderPanel extends HTMLElement {
             await this._hass.callApi(
                 "PUT",
                 `ovms_trips_recorder/drivers/${kind}/${encodeURIComponent(target)}`,
-                kind === "settings" ? { enabled: field.checked } : { driver },
+                { driver },
             );
             this.driverError = "";
             await this.loadTrips({ refresh: true });

@@ -1,0 +1,13 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Paramètres des conducteurs",
+        "description": "Choisissez si les commandes des conducteurs sont affichées dans le panneau Trajets. L'attribution automatique utilise toujours les conducteurs par défaut enregistrés lorsque les commandes sont masquées.",
+        "data": {
+          "driver_controls_enabled": "Afficher les conducteurs"
+        }
+      }
+    }
+  }
+}
