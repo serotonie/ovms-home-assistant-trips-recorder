@@ -313,7 +313,7 @@ test("trip deletion is admin-only, confirmed, and refreshes the list", async () 
     assert.equal(panel.deletingTripId, null);
     assert.equal(panel.deleteError, "");
     assert.match(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip="trip-1"/);
-    assert.match(panel.renderTripDetails({ id: "trip-1" }), /aria-label="Delete trip"[^>]*data-delete-trip="trip-1"[^>]*<ha-icon icon="mdi:delete"/);
+    assert.match(panel.renderTripDetails({ id: "trip-1" }), /aria-label="Delete trip"[^>]*data-delete-trip="trip-1"[^>]*><ha-icon icon="mdi:delete"/);
     panel._hass.user.is_admin = false;
     assert.doesNotMatch(panel.renderTripDetails({ id: "trip-1" }), /data-delete-trip/);
 });
@@ -379,7 +379,7 @@ test("trip merge previews the combined result before saving and then refreshes",
     assert.match(panel.renderTripDetails({
         id: "first", vehicle: "car", stop_time: "2026-10-16T11:00:00Z",
         merge_next_id: "following",
-    }), /aria-label="Merge with next trip"[^>]*data-merge-trip="first"[^>]*<ha-icon icon="mdi:call-merge"/);
+    }), /aria-label="Merge with next trip"[^>]*data-merge-trip="first"[^>]*><ha-icon icon="mdi:call-merge"/);
     await panel.previewTripMerge("first", "following");
     assert.equal(dialog.open, true);
     assert.match(dialog.innerHTML, /15\.0 km/);
