@@ -34,12 +34,9 @@ def _matches_trip_filters(trip: dict, query) -> bool:
     )
 
 
-async def _can_merge_trip(request, store, trip_id: str) -> bool:
-    """Allow administrators or the assigned driver when driver controls are enabled."""
-    user = request.get("hass_user")
-    if getattr(user, "is_admin", False):
-        return True
-    return await store.async_user_owns_trip(trip_id, getattr(user, "id", None))
+def _can_merge_trips(request) -> bool:
+    """Allow only administrators to merge trips, regardless of their assignments."""
+    return bool(getattr(request.get("hass_user"), "is_admin", False))
 
 
 class TripsRecorderApiView(HomeAssistantView):
@@ -386,8 +383,8 @@ class TripMergePreviewApiView(HomeAssistantView):
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         if store is None:
             return self.json_message("Trip storage is unavailable.", status_code=503)
-        if not await _can_merge_trip(request, store, trip_id):
-            return self.json_message("Trip driver or administrator access required.", status_code=403)
+        if not _can_merge_trips(request):
+            return self.json_message("Administrator access required.", status_code=403)
         try:
             return self.json(await store.async_get_trip_merge_preview(trip_id))
         except KeyError:
@@ -410,8 +407,8 @@ class TripMergeApiView(HomeAssistantView):
         store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
         if store is None:
             return self.json_message("Trip storage is unavailable.", status_code=503)
-        if not await _can_merge_trip(request, store, trip_id):
-            return self.json_message("Trip driver or administrator access required.", status_code=403)
+        if not _can_merge_trips(request):
+            return self.json_message("Administrator access required.", status_code=403)
         try:
             data = await request.json()
         except (ValueError, UnicodeDecodeError):

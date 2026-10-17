@@ -7738,7 +7738,7 @@
 			return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` + (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") + this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
 		}
 		canMergeTrip(trip) {
-			return Boolean(this._hass?.user?.is_admin || this.driverControlsEnabled && this.userDriverId && trip.driver === this.userDriverId);
+			return Boolean(this._hass?.user?.is_admin);
 		}
 		async saveDriver(field) {
 			if (this.savingDriver) return;

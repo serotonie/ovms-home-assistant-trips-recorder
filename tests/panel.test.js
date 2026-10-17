@@ -394,7 +394,7 @@ test("trip merge previews the combined result before saving and then refreshes",
     assert.equal(panel.mergingTripId, null);
 });
 
-test("trip merge action is shown to the linked driver only when controls are enabled", () => {
+test("trip merge action is shown to administrators only", () => {
     const { panel } = createPanelWithFakeLeaflet();
     panel._hass = { user: { is_admin: false } };
     panel.driverControlsEnabled = true;
@@ -404,10 +404,8 @@ test("trip merge action is shown to the linked driver only when controls are ena
         merge_next_id: "following",
     };
     const anotherTrip = { ...ownTrip, id: "other", driver: "person.bob" };
-    assert.match(panel.renderTripDetails(ownTrip), /data-merge-trip="first"/);
-    assert.doesNotMatch(panel.renderTripDetails(anotherTrip), /data-merge-trip/);
-    panel.driverControlsEnabled = false;
     assert.doesNotMatch(panel.renderTripDetails(ownTrip), /data-merge-trip/);
+    assert.doesNotMatch(panel.renderTripDetails(anotherTrip), /data-merge-trip/);
     panel._hass.user.is_admin = true;
     assert.match(panel.renderTripDetails(anotherTrip), /data-merge-trip="other"/);
 });

@@ -325,10 +325,7 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     canMergeTrip(trip) {
-        return Boolean(
-            this._hass?.user?.is_admin ||
-            (this.driverControlsEnabled && this.userDriverId && trip.driver === this.userDriverId)
-        );
+        return Boolean(this._hass?.user?.is_admin);
     }
 
     async saveDriver(field) {
