@@ -3,11 +3,15 @@
     "step": {
       "init": {
         "title": "Paramètres des conducteurs",
-        "description": "Choisissez si les commandes des conducteurs sont affichées dans le panneau Trajets. L'attribution automatique utilise toujours les conducteurs par défaut enregistrés lorsque les commandes sont masquées.",
+        "description": "Choisissez si les conducteurs sont affichés dans le panneau Trajets et sélectionnez une personne par défaut pour chaque véhicule. Les valeurs par défaut s'appliquent aux nouveaux trajets et aux trajets sans conducteur, même lorsque les commandes sont masquées. Effacez une sélection pour supprimer la valeur par défaut ; les trajets déjà attribués ne changent pas.",
         "data": {
-          "driver_controls_enabled": "Afficher les conducteurs"
+          "driver_controls_enabled": "Afficher les conducteurs",
+          "driver_defaults": "Conducteurs par défaut par véhicule"
         }
       }
+    },
+    "error": {
+      "invalid_driver": "Choisissez une personne existante dans Home Assistant pour chaque véhicule."
     }
   }
 }

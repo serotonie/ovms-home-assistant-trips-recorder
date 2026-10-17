@@ -230,7 +230,7 @@ test("driver selection escapes person names and keeps deleted assignments visibl
     assert.match(panel.renderTripDetails({ id: "empty" }), /driver-warning">Driver not set/);
 });
 
-test("driver defaults are admin-only and existing choices are rendered per vehicle", async () => {
+test("default driver settings are absent from the panel for admins and other users", async () => {
     const { panel } = createPanelWithFakeLeaflet();
     const settings = { innerHTML: "", querySelector() { return null; } };
     panel.shadowRoot.querySelector = (selector) => selector === "#driver-settings" ? settings : null;
@@ -244,9 +244,7 @@ test("driver defaults are admin-only and existing choices are rendered per vehic
     };
     await panel.loadDriverSettings();
     assert.deepEqual(calls, [["GET", "ovms_trips_recorder/drivers"]]);
-    assert.match(settings.innerHTML, /Default drivers per vehicle/);
-    assert.match(settings.innerHTML, /data-driver-kind="vehicle" data-driver-target="car"/);
-    assert.match(settings.innerHTML, /value="person.alice" selected/);
+    assert.doesNotMatch(settings.innerHTML, /Default drivers per vehicle|data-driver-kind="vehicle"/);
     panel._hass.user.is_admin = false;
     panel.updateDriverSettings();
     assert.doesNotMatch(settings.innerHTML, /data-driver-kind="vehicle"/);
@@ -285,7 +283,7 @@ test("driver visibility is controlled by integration options, not a panel toggle
     });
     await panel.loadDriverSettings();
     assert.match(panel.renderTripDetails({ id: "trip" }), /trip-driver/);
-    assert.match(settings.innerHTML, /data-driver-kind="vehicle"/);
+    assert.doesNotMatch(settings.innerHTML, /data-driver-kind="vehicle"/);
     assert.doesNotMatch(settings.innerHTML, /data-driver-kind="settings"|type="checkbox"/);
     panel._hass.callApi = async () => ({ enabled: false, drivers: [], defaults: {}, vehicles: [] });
     await panel.loadDriverSettings();

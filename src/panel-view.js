@@ -49,7 +49,6 @@ export function renderPanel(panel) {
         .pagination { display: grid; justify-items: center; gap: 12px; padding: 24px; }
         .pagination-error { color: var(--error-color); }
         .driver-settings { margin-bottom: 24px; }
-        .driver-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-block: 12px; }
         .trip-driver { margin-block: 12px; }
         .driver-warning { color: var(--error-color); }
         @media (max-width: 850px) { main { padding: var(--ha-space-3, 16px); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trips-grid { grid-template-columns: 1fr; } }
@@ -113,13 +112,7 @@ export function renderTripDetails(panel, trip) {
 
 export function renderDriverSettings(panel) {
     return `${panel.driverError ? `<p class="driver-warning" role="alert">${panel.escape(panel.driverError)}</p>` : ""}
-        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}
-        ${panel.driverControlsEnabled && panel._hass?.user?.is_admin ? `<details><summary>${panel.escape(panel.t("defaultDrivers"))}</summary>
-            <p>${panel.escape(panel.t("defaultDriverHelp"))}</p>
-            <div class="driver-defaults">${panel.driverVehicles.map((vehicle) => `<label>${panel.escape(vehicle)}
-                <select data-driver-kind="vehicle" data-driver-target="${panel.escape(vehicle)}" ${!panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(panel.driverDefaults[vehicle])}</select>
-            </label>`).join("")}</div>
-        </details>` : ""}`;
+        ${panel.driverControlsEnabled && !panel.drivers.length ? `<p>${panel.escape(panel.t("noDrivers"))}</p>` : ""}`;
 }
 
 export function renderMap(index) {

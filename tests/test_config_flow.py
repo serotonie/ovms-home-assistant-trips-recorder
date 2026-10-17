@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
@@ -49,17 +50,51 @@ def integration(monkeypatch):
         Platform=types.SimpleNamespace(SENSOR="sensor"),
     )
     module("homeassistant.core", HomeAssistant=object, callback=lambda func: func)
+    class EntitySelector:
+        def __init__(self, config):
+            self.config = config
+
+        def __call__(self, value):
+            if not isinstance(value, str) or not value.startswith("person."):
+                raise vol.Invalid("Expected person entity")
+            return value
+
+    class ObjectSelector:
+        def __init__(self, config):
+            self.config = config
+
+        def __call__(self, value):
+            return vol.Schema({
+                vol.Optional(key): field["selector"]
+                for key, field in self.config["fields"].items()
+            })(value)
+
+    module("homeassistant.helpers", __path__=[])
+    module(
+        "homeassistant.helpers.selector",
+        EntitySelector=EntitySelector, ObjectSelector=ObjectSelector,
+    )
 
     package_name = "trips_options_test"
     store = types.SimpleNamespace(
         driver_controls_enabled=False, async_load=AsyncMock(),
         async_start=AsyncMock(),
+        get_driver_defaults=Mock(return_value={}),
+        async_get_vehicle_ids=AsyncMock(return_value=[]),
+        get_drivers=Mock(return_value=[
+            {"id": "person.alice", "name": "Alice"},
+            {"id": "person.bob", "name": "Bob"},
+        ]),
     )
 
     async def set_enabled(enabled):
         store.driver_controls_enabled = enabled
 
     store.async_set_driver_controls_enabled = AsyncMock(side_effect=set_enabled)
+    async def set_defaults(defaults):
+        store.get_driver_defaults.return_value = defaults
+
+    store.async_set_driver_defaults = AsyncMock(side_effect=set_defaults)
     module(f"{package_name}.trip_store", TripStore=Mock(return_value=store))
     module(
         f"{package_name}.panel", async_setup_panel=AsyncMock(),
@@ -93,16 +128,18 @@ def integration(monkeypatch):
             async_forward_entry_setups=AsyncMock(),
         ),
     )
+    hass.data = {package.DOMAIN: {package.DATA_TRIP_STORE: store}}
     return package, flow, hass, entry, store
 
 
 @pytest.mark.parametrize("options,expected", [({}, False), ({OPTION: True}, True), ({OPTION: False}, False)])
 def test_options_form_uses_saved_value_and_defaults_to_disabled(integration, options, expected):
-    _, flow_module, _, entry, _ = integration
+    _, flow_module, hass, entry, _ = integration
     entry.options = options
     flow = flow_module.TripsRecorderConfigFlow.async_get_options_flow(entry)
     assert isinstance(flow, flow_module.TripsRecorderOptionsFlow)
     flow.config_entry = entry
+    flow.hass = hass
     result = asyncio.run(flow.async_step_init())
     assert result["type"] == "form"
     assert result["step_id"] == "init"
@@ -113,24 +150,26 @@ def test_options_form_uses_saved_value_and_defaults_to_disabled(integration, opt
 
 @pytest.mark.parametrize("enabled", [True, False])
 def test_options_submit_preserves_other_options(integration, enabled):
-    _, flow_module, _, entry, _ = integration
+    _, flow_module, hass, entry, _ = integration
     entry.options = {"other": "preserved"}
     flow = flow_module.TripsRecorderOptionsFlow()
     flow.config_entry = entry
+    flow.hass = hass
     result = asyncio.run(flow.async_step_init({OPTION: enabled}))
     assert result == {
         "type": "create_entry", "title": "",
-        "data": {"other": "preserved", OPTION: enabled},
+        "data": {"other": "preserved", OPTION: enabled, "driver_defaults": {}},
     }
 
 
 @pytest.mark.parametrize("legacy", [True, False])
 def test_setup_migrates_panel_setting_and_registers_options_listener(integration, legacy):
     package, _, hass, entry, store = integration
+    hass.data = {}
     store.driver_controls_enabled = legacy
     entry.options = {"other": "preserved"}
     assert asyncio.run(package.async_setup_entry(hass, entry)) is True
-    assert entry.options == {"other": "preserved", OPTION: legacy}
+    assert entry.options == {"other": "preserved", OPTION: legacy, "driver_defaults": {}}
     assert store.driver_controls_enabled is legacy
     entry.add_update_listener.assert_called_once_with(package._async_update_options)
     entry.async_on_unload.assert_called_once_with("unsub")
@@ -139,7 +178,8 @@ def test_setup_migrates_panel_setting_and_registers_options_listener(integration
 @pytest.mark.parametrize("enabled", [True, False])
 def test_options_override_legacy_setting_and_apply_live(integration, enabled):
     package, _, hass, entry, store = integration
-    entry.options = {OPTION: enabled}
+    hass.data = {}
+    entry.options = {OPTION: enabled, "driver_defaults": {}}
     store.driver_controls_enabled = not enabled
     asyncio.run(package.async_setup_entry(hass, entry))
     hass.config_entries.async_update_entry.assert_not_called()
@@ -157,3 +197,69 @@ def test_yaml_import_remains_on_config_flow(integration):
     flow = flow_module.TripsRecorderConfigFlow()
     flow._async_current_entries = lambda: []
     assert asyncio.run(flow.async_step_import())["type"] == "create_entry"
+
+
+def test_default_selectors_are_in_same_form_even_with_hidden_controls(integration):
+    _, flow_module, hass, entry, store = integration
+    store.async_get_vehicle_ids.return_value = ["car", "other"]
+    entry.options = {OPTION: False, "driver_defaults": {"car": "person.alice"}}
+    flow = flow_module.TripsRecorderOptionsFlow()
+    flow.config_entry, flow.hass = entry, hass
+    result = asyncio.run(flow.async_step_init())
+    schema = result["data_schema"]
+    key = next(key for key in schema.schema if key.schema == "driver_defaults")
+    assert key.description == {"suggested_value": {"car": "person.alice"}}
+    selector = schema.schema[key]
+    assert set(selector.config["fields"]) == {"car", "other"}
+    assert selector.config["fields"]["car"]["label"] == "car"
+    assert selector.config["fields"]["car"]["selector"].config == {"domain": "person"}
+    assert schema({OPTION: False, "driver_defaults": {"car": "person.bob"}}) == {
+        OPTION: False, "driver_defaults": {"car": "person.bob"},
+    }
+    with pytest.raises(vol.Invalid):
+        schema({"driver_defaults": {"car": "sensor.invalid"}})
+
+
+def test_default_options_save_validate_and_clear(integration):
+    _, flow_module, hass, entry, store = integration
+    store.async_get_vehicle_ids.return_value = ["car", "other"]
+    entry.options = {OPTION: False, "driver_defaults": {"car": "person.alice"}}
+    flow = flow_module.TripsRecorderOptionsFlow()
+    flow.config_entry, flow.hass = entry, hass
+    for selection in ({"car": "person.bob", "other": "person.alice"}, {}):
+        result = asyncio.run(flow.async_step_init({OPTION: False, "driver_defaults": selection}))
+        assert result["data"]["driver_defaults"] == selection
+    for selection in ({"car": "person.deleted"}, {"unknown": "person.alice"}):
+        result = asyncio.run(flow.async_step_init({OPTION: False, "driver_defaults": selection}))
+        assert result["errors"] == {"driver_defaults": "invalid_driver"}
+
+
+def test_migrates_default_drivers_and_applies_updates_live(integration):
+    package, _, hass, entry, store = integration
+    hass.data = {}
+    store.get_driver_defaults.return_value = {"car": "person.alice"}
+    entry.options = {OPTION: False}
+    asyncio.run(package.async_setup_entry(hass, entry))
+    assert entry.options == {OPTION: False, "driver_defaults": {"car": "person.alice"}}
+    entry.options = {OPTION: False, "driver_defaults": {"car": "person.bob"}}
+    asyncio.run(package._async_update_options(hass, entry))
+    store.async_set_driver_defaults.assert_awaited_once_with({"car": "person.bob"})
+    assert store.driver_controls_enabled is False
+
+
+def test_deleted_defaults_are_preserved_and_can_be_replaced(integration):
+    _, flow_module, hass, entry, store = integration
+    entry.options = {OPTION: False, "driver_defaults": {"old-car": "person.deleted"}}
+    flow = flow_module.TripsRecorderOptionsFlow()
+    flow.config_entry, flow.hass = entry, hass
+    for selected in ({"old-car": "person.deleted"}, {"old-car": "person.alice"}, {}):
+        result = asyncio.run(flow.async_step_init({OPTION: True, "driver_defaults": selected}))
+        assert result["data"]["driver_defaults"] == selected
+
+
+def test_options_translation_errors_use_home_assistant_schema():
+    for path in [COMPONENT / "strings.json", *sorted((COMPONENT / "translations").glob("*.json"))]:
+        options = json.loads(path.read_text())["options"]
+        assert "invalid_driver" in options["error"]
+        assert "driver_defaults" in options["step"]["init"]["data"]
+        assert "error" not in options["step"]["init"]
