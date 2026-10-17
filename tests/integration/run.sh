@@ -35,7 +35,8 @@ docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
 
 attempt=1
 while [ "$attempt" -le 60 ]; do
-  if curl --fail --silent --show-error http://localhost:8123/api/ovms_trips_recorder/trips >/dev/null 2>&1; then
+  if [ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    http://localhost:8123/api/ovms_trips_recorder/trips)" = 401 ]; then
     break
   fi
   sleep 2
@@ -44,6 +45,63 @@ done
 
 if [ "$attempt" -gt 60 ]; then
   echo "Home Assistant did not expose the Trips Recorder API" >&2
+  exit 1
+fi
+
+# Create a disposable Home Assistant owner and exchange its onboarding code.
+credential=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+auth_code=$(curl --fail --silent --show-error \
+  -H 'Content-Type: application/json' \
+  -d "{\"client_id\":\"http://localhost:8123/\",\"name\":\"API test\",\"username\":\"api-test\",\"password\":\"$credential\",\"language\":\"en\"}" \
+  http://localhost:8123/api/onboarding/users |
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["auth_code"])')
+token=$(curl --fail --silent --show-error \
+  --data-urlencode 'grant_type=authorization_code' \
+  --data-urlencode 'client_id=http://localhost:8123/' \
+  --data-urlencode "code=$auth_code" \
+  http://localhost:8123/auth/token |
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+
+auth_scheme='Bearer'
+# Each data route must reject anonymous requests before executing its handler.
+# Authenticated writes use a missing trip so no recorded data is changed.
+for definition in \
+  'GET|trips|200|{}' \
+  'GET|vehicles/unknown/trips?from=2026-01-01T00:00:00Z&to=2026-12-31T00:00:00Z|200|{}' \
+  'GET|drivers|200|{}' \
+  'PUT|drivers/trip/missing|400|{}' \
+  'GET|categories|200|{}' \
+  'PUT|categories/trip/missing|404|{"categories":[]}' \
+  'DELETE|trips/missing|404|{}' \
+  'GET|trips/missing/merge-preview|404|{}' \
+  'POST|trips/missing/merge|404|{"next_trip_id":"also-missing"}'; do
+  method=${definition%%|*}
+  rest=${definition#*|}
+  path=${rest%%|*}
+  rest=${rest#*|}
+  expected=${rest%%|*}
+  body=${rest#*|}
+  url="http://localhost:8123/api/ovms_trips_recorder/$path"
+  status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    -X "$method" -H 'Content-Type: application/json' -d "$body" "$url")
+  if [ "$status" != 401 ]; then
+    echo "$method $path: expected anonymous 401, received $status" >&2
+    exit 1
+  fi
+  status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    -X "$method" -H 'Content-Type: application/json' -H "Authorization: $auth_scheme $token" \
+    -d "$body" "$url")
+  if [ "$status" != "$expected" ]; then
+    echo "$method $path: expected authenticated $expected, received $status" >&2
+    exit 1
+  fi
+done
+
+status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  -H "Authorization: $auth_scheme invalid-test-token" \
+  http://localhost:8123/api/ovms_trips_recorder/trips)
+if [ "$status" != 401 ]; then
+  echo "Invalid token: expected 401, received $status" >&2
   exit 1
 fi
 
@@ -68,7 +126,8 @@ done
 
 attempt=1
 while [ "$attempt" -le 30 ]; do
-  if curl --fail --silent --show-error http://localhost:8123/api/ovms_trips_recorder/trips |
+  if curl --fail --silent --show-error -H "Authorization: $auth_scheme $token" \
+    http://localhost:8123/api/ovms_trips_recorder/trips |
     python3 -c 'import json, sys; data = json.load(sys.stdin); expected = {"e2e-default", "e2e-client", "e2e-simple", "e2e-custom"}; sys.exit(not (expected <= set(data["vehicles"]) and expected <= {trip["vehicle"] for trip in data["trips"]}))'; then
     exit 0
   fi

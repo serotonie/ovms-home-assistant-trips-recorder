@@ -18,6 +18,18 @@ https://github.com/serotonie/ovms-home-assistant-trips-recorder
 - provide a sidebar panel for viewing a vehicle's trips
 - remain compatible with a HACS installation
 
+## API authentication
+
+All integration API endpoints require Home Assistant authentication, including
+`GET /api/ovms_trips_recorder/trips`. Anonymous requests or invalid access tokens
+receive HTTP 401. The Trips panel uses the current Home Assistant session.
+External clients must use the `Authorization` header with the `Bearer` scheme
+and a Home Assistant access token.
+
+Authentication does not replace additional permissions: deleting trips requires
+an administrator; merging requires an administrator or the assigned driver when
+driver controls are enabled.
+
 ## Trip status
 
 While a trip is in progress, its card displays a localized status badge next to

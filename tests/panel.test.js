@@ -175,10 +175,11 @@ function createPanelWithFakeLeaflet(options = {}) {
     return { panel, fakeLeaflet };
 }
 
-function createPaginationPanel(fetchImpl, IntersectionObserver) {
+function createPaginationPanel(callApiImpl, IntersectionObserver) {
     const customElements = createCustomElementRegistry();
     const Panel = loadPanelModule({
-        customElements, document: {}, window: {}, fetchImpl, IntersectionObserver,
+        customElements, document: {}, window: {}, IntersectionObserver,
+        fetchImpl: () => assert.fail("Trips must use the authenticated Home Assistant API"),
     });
     const panel = new Panel();
     const nodes = new Map();
@@ -200,17 +201,23 @@ function createPaginationPanel(fetchImpl, IntersectionObserver) {
         });
     }
     panel.shadowRoot.querySelector = (selector) => nodes.get(selector) || null;
-    panel._hass = { config: { time_zone: "America/New_York" } };
+    panel._hass = {
+        config: { time_zone: "America/New_York" },
+        async callApi(method, endpoint) {
+            assert.equal(method, "GET");
+            assert.ok(endpoint.startsWith("ovms_trips_recorder/trips?"));
+            return callApiImpl(endpoint);
+        },
+    };
+    panel.loadDriverSettings = async () => {};
+    panel.loadCategorySettings = async () => {};
     return { panel, nodes };
 }
 
 function paginatedResponse(trips, count, nextOffset = null) {
     return {
-        ok: true,
-        json: async () => ({
-            trips, count, vehicles: ["car", "other"],
-            has_more: nextOffset !== null, next_offset: nextOffset,
-        }),
+        trips, count, vehicles: ["car", "other"],
+        has_more: nextOffset !== null, next_offset: nextOffset,
     };
 }
 
@@ -218,6 +225,24 @@ const paginationTrips = Array.from({ length: 23 }, (_, index) => ({
     vehicle: "car", start_time: `2026-10-${String(31 - index).padStart(2, "0")}T12:00:00Z`,
     stop_time: "2026-11-01T12:00:00Z", waypoints: [],
 }));
+
+test("trip loading uses the Home Assistant session and never falls back to anonymous fetch", async () => {
+    const { panel } = createPaginationPanel();
+    const calls = [];
+    panel._hass.callApi = async (...args) => {
+        calls.push(args);
+        return paginatedResponse(paginationTrips.slice(0, 1), 1);
+    };
+    await panel.loadTrips();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], "GET");
+    assert.match(calls[0][1], /^ovms_trips_recorder\/trips\?limit=10&offset=0&/);
+    assert.equal(panel.trips.length, 1);
+    panel._hass.callApi = async () => { throw { status_code: 401 }; };
+    await panel.loadTrips({ refresh: true });
+    assert.equal(panel.loadError, true);
+    assert.equal(panel.trips.length, 1);
+});
 
 test("driver selection escapes person names and keeps deleted assignments visible", () => {
     const { panel } = createPanelWithFakeLeaflet();
@@ -682,11 +707,11 @@ test("infinite scroll guards concurrent loads, stops on errors, retries, and dis
         disconnect() { this.disconnected = true; }
     }
     let calls = 0;
-    let resolvePage;
+    let rejectPage;
     const { panel, nodes } = createPaginationPanel(async () => {
         calls++;
         if (calls === 1) return paginatedResponse(paginationTrips.slice(0, 10), 23, 10);
-        if (calls === 2) return new Promise((resolve) => { resolvePage = resolve; });
+        if (calls === 2) return new Promise((resolve, reject) => { rejectPage = reject; });
         return paginatedResponse(paginationTrips.slice(10, 20), 23, 20);
     }, Observer);
     await panel.loadTrips();
@@ -696,7 +721,7 @@ test("infinite scroll guards concurrent loads, stops on errors, retries, and dis
     observer.callback([{ isIntersecting: true }]);
     observer.callback([{ isIntersecting: true }]);
     assert.equal(calls, 2);
-    resolvePage({ ok: false, status: 503 });
+    rejectPage({ status_code: 503 });
     await new Promise(setImmediate);
     assert.equal(panel.trips.length, 10);
     assert.match(nodes.get("#pagination").innerHTML, /role="alert"/);
@@ -713,12 +738,15 @@ test("infinite scroll guards concurrent loads, stops on errors, retries, and dis
 
 test("failed initial requests and malformed pages show retry without an empty-results message", async () => {
     for (const response of [
-        { ok: false, status: 500 },
+        null,
         paginatedResponse([], 23, 10),
     ]) {
         let calls = 0;
         const { panel, nodes } = createPaginationPanel(async () => {
-            if (++calls === 1) return response;
+            if (++calls === 1) {
+                if (response === null) throw { status_code: 500 };
+                return response;
+            }
             return paginatedResponse([], 0);
         });
         await panel.loadTrips();
@@ -1196,12 +1224,13 @@ function createVersionPanel({ stored, version }) {
         customElements,
         document: { createElement: () => ({}) },
         window: win,
-        fetchImpl: async () => ({
-            ok: true,
-            json: async () => ({ trips: [], version, count: 0, has_more: false, next_offset: null }),
-        }),
     });
     const panel = new TripsRecorderPanel();
+    panel._hass = {
+        callApi: async () => ({ trips: [], version, count: 0, has_more: false, next_offset: null }),
+    };
+    panel.loadDriverSettings = async () => {};
+    panel.loadCategorySettings = async () => {};
     panel.updateTrips = () => { panel.updated = true; };
     return { panel, win, store, deleted };
 }
