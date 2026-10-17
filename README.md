@@ -11,6 +11,32 @@ https://github.com/enoch85/ovms-home-assistant
 Component repository:
 https://github.com/serotonie/ovms-home-assistant-trips-recorder
 
+## Index
+
+### General users
+
+- [Overview](#ovms-home-assistant-trips-recorder)
+- [HACS installation](#hacs-installation)
+- [Trip status, results, and filters](#results-pagination)
+- [Trip drivers](#trip-drivers)
+- [Trip categories](#trip-categories)
+
+### Admins
+
+- [Configure driver controls and defaults](#trip-drivers)
+- [Configure categories and defaults](#trip-categories)
+- [Delete trips](#deleting-trips)
+
+### Developers
+
+- [Project structure](#structure)
+- [Development environment](#development-environment)
+- [REST API](#rest-api)
+- [Tests](#tests)
+- [OVMS entity dependency](#ovms-entity-dependency)
+- [Storage](#storage)
+- [Third-party licenses](#third-party-licenses)
+
 ## Goals
 
 - rely only on OVMS data already published in Home Assistant
