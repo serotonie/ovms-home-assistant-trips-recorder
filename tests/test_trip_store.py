@@ -190,6 +190,30 @@ def test_merge_rejects_stale_next_trip_and_missing_trip() -> None:
     assert len(store._data["trips"]) == 2
 
 
+def test_only_linked_trip_driver_can_merge_when_driver_controls_are_enabled() -> None:
+    alice = types.SimpleNamespace(
+        entity_id="person.alice", attributes={"user_id": "user-alice"}
+    )
+    bob = types.SimpleNamespace(
+        entity_id="person.bob", attributes={"user_id": "user-bob"}
+    )
+    store = TripStore.__new__(TripStore)
+    store._hass = types.SimpleNamespace(
+        states=types.SimpleNamespace(async_all=lambda domain: [alice, bob])
+    )
+    store._data = {
+        "driver_controls_enabled": True,
+        "trips": [{"id": "trip-1", "driver": "person.alice"}],
+    }
+
+    assert store.get_driver_id_for_user("user-alice") == "person.alice"
+    assert store.get_driver_id_for_user("unknown") is None
+    assert asyncio.run(store.async_user_owns_trip("trip-1", "user-alice"))
+    assert not asyncio.run(store.async_user_owns_trip("trip-1", "user-bob"))
+    store._data["driver_controls_enabled"] = False
+    assert not asyncio.run(store.async_user_owns_trip("trip-1", "user-alice"))
+
+
 def test_delete_trip_during_stop_does_not_restore_deleted_trip() -> None:
     trip = {"id": "active", "waypoints": []}
     state = {

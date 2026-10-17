@@ -221,6 +221,7 @@ const paginationTrips = Array.from({ length: 23 }, (_, index) => ({
 
 test("driver selection escapes person names and keeps deleted assignments visible", () => {
     const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { user: { is_admin: false } };
     panel.driverControlsEnabled = true;
     panel.drivers = [{ id: "person.alice", name: '<Alice & "Bob">' }];
     const html = panel.renderTripDetails({ id: "trip-1", driver: "person.alice", waypoints: [] });
@@ -241,7 +242,7 @@ test("default driver settings are absent from the panel for admins and other use
         user: { is_admin: true },
         async callApi(...args) {
             calls.push(args);
-            return { enabled: true, drivers: [{ id: "person.alice", name: "Alice" }], defaults: { car: "person.alice" }, vehicles: ["car"] };
+            return { enabled: true, drivers: [{ id: "person.alice", name: "Alice" }], defaults: { car: "person.alice" }, vehicles: ["car"], user_driver_id: "person.alice" };
         },
     };
     await panel.loadDriverSettings();
@@ -368,7 +369,25 @@ test("trip merge previews the combined result before saving and then refreshes",
     assert.equal(panel.mergingTripId, null);
 });
 
-test("trip merge is admin-only and reports preview and save failures", async () => {
+test("trip merge action is shown to the linked driver only when controls are enabled", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    panel._hass = { user: { is_admin: false } };
+    panel.driverControlsEnabled = true;
+    panel.userDriverId = "person.alice";
+    const ownTrip = {
+        id: "first", driver: "person.alice", stop_time: "2026-10-16T11:00:00Z",
+        merge_next_id: "following",
+    };
+    const anotherTrip = { ...ownTrip, id: "other", driver: "person.bob" };
+    assert.match(panel.renderTripDetails(ownTrip), /data-merge-trip="first"/);
+    assert.doesNotMatch(panel.renderTripDetails(anotherTrip), /data-merge-trip/);
+    panel.driverControlsEnabled = false;
+    assert.doesNotMatch(panel.renderTripDetails(ownTrip), /data-merge-trip/);
+    panel._hass.user.is_admin = true;
+    assert.match(panel.renderTripDetails(anotherTrip), /data-merge-trip="other"/);
+});
+
+test("trip merge rejects unassigned users and reports preview and save failures", async () => {
     const dialog = {
         open: true,
         innerHTML: "",

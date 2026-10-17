@@ -53,6 +53,7 @@ class TripsRecorderPanel extends HTMLElement {
         this.trips = [];
         this.drivers = [];
         this.driverControlsEnabled = false;
+        this.userDriverId = null;
         this.driverError = "";
         this.savingDriver = false;
         this.deleteError = "";
@@ -246,14 +247,17 @@ class TripsRecorderPanel extends HTMLElement {
             const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
             if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) ||
                 !data.defaults || typeof data.defaults !== "object" ||
-                typeof data.enabled !== "boolean") {
+                typeof data.enabled !== "boolean" ||
+                (data.user_driver_id != null && typeof data.user_driver_id !== "string")) {
                 throw new Error("Invalid driver settings response");
             }
             this.drivers = data.drivers;
             this.driverControlsEnabled = data.enabled;
+            this.userDriverId = data.user_driver_id || null;
             this.driverError = "";
         } catch (error) {
             console.error("Failed to load drivers", error);
+            this.userDriverId = null;
             this.driverError = this.t("driverLoadError");
         }
         this.updateDriverSettings();
@@ -321,6 +325,13 @@ class TripsRecorderPanel extends HTMLElement {
         return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` +
             (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") +
             this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
+    }
+
+    canMergeTrip(trip) {
+        return Boolean(
+            this._hass?.user?.is_admin ||
+            (this.driverControlsEnabled && this.userDriverId && trip.driver === this.userDriverId)
+        );
     }
 
     async saveDriver(field) {

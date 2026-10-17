@@ -149,7 +149,7 @@
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${panel._hass?.user?.is_admin && trip.id ? `${trip.merge_next_id && trip.stop_time ? `<ha-button data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" appearance="outlined" ${panel.mergingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("mergeTrip"))}</ha-button>` : ""}<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}</div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-button data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" appearance="outlined" ${panel.mergingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("mergeTrip"))}</ha-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}` : ""}</div>
                 `;
 	}
 	function renderTripCategories(panel, trip) {
@@ -7497,6 +7497,7 @@
 			this.trips = [];
 			this.drivers = [];
 			this.driverControlsEnabled = false;
+			this.userDriverId = null;
 			this.driverError = "";
 			this.savingDriver = false;
 			this.deleteError = "";
@@ -7676,12 +7677,14 @@
 			if (!this._hass?.callApi) return;
 			try {
 				const data = await this._hass.callApi("GET", "ovms_trips_recorder/drivers");
-				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean") throw new Error("Invalid driver settings response");
+				if (!Array.isArray(data.drivers) || !Array.isArray(data.vehicles) || !data.defaults || typeof data.defaults !== "object" || typeof data.enabled !== "boolean" || data.user_driver_id != null && typeof data.user_driver_id !== "string") throw new Error("Invalid driver settings response");
 				this.drivers = data.drivers;
 				this.driverControlsEnabled = data.enabled;
+				this.userDriverId = data.user_driver_id || null;
 				this.driverError = "";
 			} catch (error) {
 				console.error("Failed to load drivers", error);
+				this.userDriverId = null;
 				this.driverError = this.t("driverLoadError");
 			}
 			this.updateDriverSettings();
@@ -7736,6 +7739,9 @@
 		driverOptions(selected) {
 			const missing = selected && !this.drivers.some((driver) => driver.id === selected);
 			return `<option value="" disabled ${!selected ? "selected" : ""}>${this.escape(this.t("driverNotSet"))}</option>` + (missing ? `<option value="${this.escape(selected)}" selected disabled>${this.escape(selected)} (${this.escape(this.t("driverUnavailable"))})</option>` : "") + this.drivers.map((driver) => `<option value="${this.escape(driver.id)}" ${driver.id === selected ? "selected" : ""}>${this.escape(driver.name)}</option>`).join("");
+		}
+		canMergeTrip(trip) {
+			return Boolean(this._hass?.user?.is_admin || this.driverControlsEnabled && this.userDriverId && trip.driver === this.userDriverId);
 		}
 		async saveDriver(field) {
 			if (this.savingDriver) return;

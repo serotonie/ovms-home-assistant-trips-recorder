@@ -384,6 +384,29 @@ class TripStore:
             key=lambda person: (person["name"].casefold(), person["id"]),
         )
 
+    def get_driver_id_for_user(self, user_id: str | None) -> str | None:
+        """Return the person entity linked to a Home Assistant user."""
+        if not user_id:
+            return None
+        return next(
+            (
+                state.entity_id
+                for state in self._hass.states.async_all("person")
+                if state.attributes.get("user_id") == user_id
+            ),
+            None,
+        )
+
+    async def async_user_owns_trip(self, trip_id: str, user_id: str | None) -> bool:
+        """Check whether an enabled driver controls the requested completed trip."""
+        if not self.driver_controls_enabled:
+            return False
+        driver_id = self.get_driver_id_for_user(user_id)
+        return bool(driver_id) and any(
+            trip.get("id") == trip_id and trip.get("driver") == driver_id
+            for trip in self._data.get("trips", [])
+        )
+
     def get_driver_defaults(self) -> dict[str, str]:
         """Return a copy of the configured per-vehicle defaults."""
         return dict(self._data.get("driver_defaults", {}))

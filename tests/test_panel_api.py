@@ -360,6 +360,9 @@ class DriverStore(FakeStore):
     def get_driver_defaults(self):
         return {"car": "person.alice"}
 
+    def get_driver_id_for_user(self, user_id):
+        return "person.alice" if user_id == "user-alice" else None
+
     async def async_set_driver_default(self, target, driver):
         await self.async_set_trip_driver(target, driver)
 
@@ -372,8 +375,8 @@ class DriverStore(FakeStore):
 
 
 class DriverRequest(dict):
-    def __init__(self, body=None, admin=False, invalid_json=False):
-        super().__init__(hass_user=types.SimpleNamespace(is_admin=admin))
+    def __init__(self, body=None, admin=False, invalid_json=False, user_id=None):
+        super().__init__(hass_user=types.SimpleNamespace(is_admin=admin, id=user_id))
         self.body = body
         self.invalid_json = invalid_json
 
@@ -396,7 +399,11 @@ def test_driver_routes_are_registered_and_authenticated() -> None:
         "enabled": False,
         "drivers": [{"id": "person.alice", "name": "Alice"}],
         "defaults": {"car": "person.alice"}, "vehicles": ["car"],
+        "user_driver_id": None,
     }
+    assert asyncio.run(panel.DriversApiView(hass).get(
+        DriverRequest(user_id="user-alice"),
+    ))["user_driver_id"] == "person.alice"
 
 
 @pytest.mark.parametrize("kind,admin,status", [
@@ -553,8 +560,11 @@ class MergeStore(FakeStore):
             raise ValueError("The following trip has changed.")
         return {"trip_id": trip_id, "next_trip_id": next_trip_id}
 
+    async def async_user_owns_trip(self, trip_id, user_id):
+        return user_id == "user-alice" and trip_id == "trip-1"
 
-def test_trip_merge_routes_are_registered_and_admin_only() -> None:
+
+def test_trip_merge_routes_allow_admins_and_assigned_drivers_only() -> None:
     hass = FakeHass(MergeStore())
     views = []
     hass.http = types.SimpleNamespace(register_view=views.append)
@@ -573,6 +583,18 @@ def test_trip_merge_routes_are_registered_and_admin_only() -> None:
     assert asyncio.run(merge.post(
         DriverRequest({"next_trip_id": "trip-2"}, admin=True), "trip-1",
     )) == {"trip_id": "trip-1", "next_trip_id": "trip-2"}
+    assert asyncio.run(preview.get(
+        DriverRequest(admin=False, user_id="user-alice"), "trip-1",
+    ))["trip_id"] == "trip-1"
+    assert asyncio.run(merge.post(
+        DriverRequest({"next_trip_id": "trip-2"}, user_id="user-alice"), "trip-1",
+    )) == {"trip_id": "trip-1", "next_trip_id": "trip-2"}
+    assert asyncio.run(preview.get(
+        DriverRequest(admin=False, user_id="user-bob"), "trip-1",
+    ))["status_code"] == 403
+    assert asyncio.run(merge.post(
+        DriverRequest({"next_trip_id": "trip-2"}, user_id="user-bob"), "trip-1",
+    ))["status_code"] == 403
     assert asyncio.run(preview.get(DriverRequest(admin=True), "no-next"))["status_code"] == 409
     assert asyncio.run(preview.get(DriverRequest(admin=True), "missing"))["status_code"] == 404
     assert asyncio.run(merge.post(
