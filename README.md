@@ -156,6 +156,17 @@ English fallback for other panel languages.
   Invalid lists or newly invented categories return 400, unknown trips return 404,
   and unavailable storage returns 503. Definitions cannot be changed by this API.
 
+## Deleting trips
+
+Administrators can permanently delete active or completed trips from the Trips
+panel. Each trip card displays a delete action to administrators and asks for
+confirmation before removing the trip. The API endpoint is also restricted to
+administrators:
+
+- `DELETE /api/ovms_trips_recorder/trips/{trip_id}` deletes the matching trip.
+  It returns 403 for non-administrators, 404 for an unknown trip, and 503 when
+  trip storage is unavailable.
+
 ## Structure
 
 ```text
