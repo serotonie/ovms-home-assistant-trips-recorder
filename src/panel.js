@@ -49,7 +49,9 @@ class TripsRecorderPanel extends HTMLElement {
         this.savingCategories = false;
         this.vehicles = [];
         this.filteredTrips = [];
-        this.filters = { from: "", to: "", vehicle: "" };
+        this.filters = { from: "", to: "", vehicle: "", driver: "", category: "" };
+        this.driverIds = [];
+        this.categoryNames = [];
         this.unsubscribeUpdates = null;
         this.loading = false;
         this._narrow = null;
@@ -200,6 +202,8 @@ class TripsRecorderPanel extends HTMLElement {
             this.hasMore = data.has_more;
             this.nextOffset = data.next_offset;
             this.vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+            this.driverIds = Array.isArray(data.driver_ids) ? data.driver_ids : [];
+            this.categoryNames = Array.isArray(data.category_names) ? data.category_names : [];
             await Promise.all([this.loadDriverSettings(), this.loadCategorySettings()]);
             if (generation !== this.requestGeneration) return;
             this.updateTrips(trips, { prefiltered: true });
@@ -377,12 +381,14 @@ class TripsRecorderPanel extends HTMLElement {
             from: this.shadowRoot.querySelector("#from")?.value ?? this.filters.from,
             to: this.shadowRoot.querySelector("#to")?.value ?? this.filters.to,
             vehicle: this.shadowRoot.querySelector("#vehicle")?.value ?? this.filters.vehicle,
+            driver: this.shadowRoot.querySelector("#driver")?.value ?? this.filters.driver,
+            category: this.shadowRoot.querySelector("#category")?.value ?? this.filters.category,
         };
         if (render) {
             this.loadTrips();
             return;
         }
-        const { from, to, vehicle } = this.filters;
+        const { from, to, vehicle, driver, category } = this.filters;
         const dateFormatter = from || to
             ? new Intl.DateTimeFormat("en-CA", {
                 timeZone: this._hass?.config?.time_zone || undefined,
@@ -397,7 +403,9 @@ class TripsRecorderPanel extends HTMLElement {
             return (
                 (!from || (tripDate && tripDate >= from)) &&
                 (!to || (tripDate && tripDate <= to)) &&
-                (!vehicle || trip.vehicle === vehicle)
+                (!vehicle || trip.vehicle === vehicle) &&
+                (!driver || trip.driver === driver) &&
+                (!category || (trip.categories || []).includes(category))
             );
         });
     }
@@ -465,19 +473,11 @@ class TripsRecorderPanel extends HTMLElement {
     bindEvents() {
         this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
         this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
-            const field = this.shadowRoot.querySelector("#page-size");
-            if (!field.checkValidity()) {
-                field.reportValidity();
-                return;
-            }
-            this.pageSize = Number(field.value);
             this.applyFilters();
         });
         this.shadowRoot.querySelector("#reset")?.addEventListener("click", () => {
             this.shadowRoot.querySelector(".filters").reset();
-            this.pageSize = 10;
-            this.shadowRoot.querySelector("#page-size").value = "10";
-            this.filters = { from: "", to: "", vehicle: "" };
+            this.filters = { from: "", to: "", vehicle: "", driver: "", category: "" };
             this.applyFilters();
         });
         this.updatePagination();
@@ -497,6 +497,7 @@ class TripsRecorderPanel extends HTMLElement {
         this.paginationObserver = null;
         const footer = this.shadowRoot.querySelector("#pagination");
         if (!footer) return;
+        this.updateTripFilterChoices();
         footer.innerHTML = this.renderPagination();
         footer.setAttribute("aria-busy", String(this.loading));
         const count = this.shadowRoot.querySelector(".trip-count");
@@ -519,6 +520,34 @@ class TripsRecorderPanel extends HTMLElement {
             }, { rootMargin: "300px" });
             this.paginationObserver = observer;
             observer.observe(footer);
+        }
+    }
+
+    updateTripFilterChoices() {
+        const driver = this.shadowRoot.querySelector("#driver");
+        const category = this.shadowRoot.querySelector("#category");
+        if (driver) {
+            const ids = [...new Set([
+                ...this.drivers.map((person) => person.id), ...this.driverIds,
+                ...this.trips.map((trip) => trip.driver).filter(Boolean),
+                ...(this.filters.driver ? [this.filters.driver] : []),
+            ])].sort();
+            const names = new Map(this.drivers.map((person) => [person.id, person.name]));
+            driver.innerHTML = `<option value="">${this.escape(this.t("allDrivers"))}</option>` +
+                ids.map((id) => `<option value="${this.escape(id)}">${this.escape(names.get(id) || id)}</option>`).join("");
+            driver.value = this.filters.driver || "";
+            driver.closest("label").hidden = !this.driverControlsEnabled && !this.filters.driver;
+        }
+        if (category) {
+            const names = [...new Set([
+                ...this.categories, ...this.categoryNames,
+                ...this.trips.flatMap((trip) => trip.categories || []),
+                ...(this.filters.category ? [this.filters.category] : []),
+            ])].sort();
+            category.innerHTML = `<option value="">${this.escape(this.t("allCategories"))}</option>` +
+                names.map((name) => `<option value="${this.escape(name)}">${this.escape(name)}</option>`).join("");
+            category.value = this.filters.category || "";
+            category.closest("label").hidden = !this.categoryControlsEnabled && !this.filters.category;
         }
     }
 

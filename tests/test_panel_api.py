@@ -484,3 +484,39 @@ def test_category_api_handles_bad_json_unknown_trip_and_missing_storage() -> Non
         DriverRequest({"categories": []}), "trip",
     ))["status_code"] == 503
     assert asyncio.run(panel.CategoriesApiView(FakeHass(None)).get(None))["status_code"] == 503
+
+
+@pytest.mark.parametrize("query,expected", [
+    ({"driver": "person.alice"}, [3, 1]),
+    ({"category": "Work"}, [2, 1]),
+    ({"driver": "person.alice", "category": "Work"}, [1]),
+    ({"driver": "person.deleted", "category": "Old & retired"}, [4]),
+    ({"driver": "person.unknown"}, []),
+    ({"category": "work"}, []),
+    ({"driver": "", "category": ""}, [5, 4, 3, 2, 1]),
+])
+def test_driver_category_filters_combine_before_counting_and_pagination(query, expected):
+    trips = [
+        {"id": 1, "driver": "person.alice", "categories": ["Work", "Personal"]},
+        {"id": 2, "driver": "person.bob", "categories": ["Work"]},
+        {"id": 3, "driver": "person.alice", "categories": ["Personal"]},
+        {"id": 4, "driver": "person.deleted", "categories": ["Old & retired"]},
+        {"id": 5},
+    ]
+    for trip in trips:
+        trip.update(vehicle="car", start_time=f"2026-10-16T10:0{trip['id']}:00Z")
+    data = _panel_request(trips, {**query, "limit": "1", "vehicle": "car", "from": "2026-10-16"})
+    assert [trip["id"] for trip in data["trips"]] == expected[:1]
+    assert data["count"] == len(expected)
+    assert data["has_more"] == (len(expected) > 1)
+    assert data["driver_ids"] == ["person.alice", "person.bob", "person.deleted"]
+    assert data["category_names"] == ["Old & retired", "Personal", "Work"]
+    if len(expected) > 1:
+        second = _panel_request(trips, {**query, "limit": "1", "offset": "1"})
+        assert [trip["id"] for trip in second["trips"]] == expected[1:2]
+    unpaginated = _panel_request(trips, query)
+    assert {trip["id"] for trip in unpaginated["trips"]} == set(expected)
+    interval = {"from": "2026-10-16T10:00:00Z", "to": "2026-10-16T12:00:00Z"}
+    vehicle = _vehicle_request(trips, {**interval, **query})
+    assert {trip["id"] for trip in vehicle["trips"]} == set(expected)
+    assert vehicle["count"] == len(expected)

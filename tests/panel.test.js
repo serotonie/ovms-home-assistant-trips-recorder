@@ -182,10 +182,10 @@ function createPaginationPanel(fetchImpl, IntersectionObserver) {
     });
     const panel = new Panel();
     const nodes = new Map();
-    for (const selector of ["#from", "#to", "#vehicle", "#page-size", ".filters",
+    for (const selector of ["#from", "#to", "#vehicle", ".filters",
         "#reset", "#pagination", "#load-more", "#retry", ".trip-count", ".trips-grid"]) {
         nodes.set(selector, {
-            value: selector === "#page-size" ? "10" : "",
+            value: "",
             listeners: {},
             addEventListener(name, callback) { this.listeners[name] = callback; },
             setAttribute() {},
@@ -193,7 +193,9 @@ function createPaginationPanel(fetchImpl, IntersectionObserver) {
             reportValidity() { this.validityReported = true; },
             insertAdjacentHTML(position, html) { this.appended = (this.appended || "") + html; },
             reset() {
-                for (const field of ["#from", "#to", "#vehicle"]) nodes.get(field).value = "";
+                for (const field of ["#from", "#to", "#vehicle", "#driver", "#category"]) {
+                    if (nodes.has(field)) nodes.get(field).value = "";
+                }
             },
         });
     }
@@ -368,6 +370,69 @@ test("category failures stay visible and rejected edits do not change loaded ass
     assert.equal(panel.savingCategories, false);
 });
 
+test("driver and category filters send encoded parameters, combine, paginate and reset", async () => {
+    const requests = [];
+    const { panel, nodes } = createPaginationPanel(async (url) => {
+        requests.push(new URL(url, "http://localhost").searchParams);
+        return paginatedResponse([{ id: "match", driver: "person.alice", categories: ["Work & travel"] }], 2, requests.length === 1 ? 1 : null);
+    });
+    for (const selector of ["#driver", "#category"]) {
+        nodes.set(selector, { value: "", label: {}, closest() { return this.label; } });
+    }
+    panel.driverControlsEnabled = true;
+    panel.categoryControlsEnabled = true;
+    panel.drivers = [{ id: "person.alice", name: "Alice" }];
+    panel.categories = ["Work & travel"];
+    nodes.get("#driver").value = "person.alice";
+    nodes.get("#category").value = "Work & travel";
+    panel.applyFilters();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(requests[0].get("driver"), "person.alice");
+    assert.equal(requests[0].get("category"), "Work & travel");
+    assert.equal(requests[0].get("offset"), "0");
+    await panel.loadTrips({ append: true });
+    assert.equal(requests[1].get("offset"), "1");
+    assert.equal(requests[1].get("category"), "Work & travel");
+    panel.bindEvents();
+    nodes.get("#reset").listeners.click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(requests[2].has("driver"), false);
+    assert.equal(requests[2].has("category"), false);
+    assert.equal(panel.filters.driver, "");
+    assert.equal(panel.filters.category, "");
+});
+
+test("filter choices include all-history assignments, escape labels and honor visibility", () => {
+    const { panel } = createPanelWithFakeLeaflet();
+    const nodes = new Map(["#driver", "#category"].map((id) => [
+        id, { value: "", label: {}, closest() { return this.label; } },
+    ]));
+    panel.shadowRoot.querySelector = (id) => nodes.get(id) || null;
+    panel.drivers = [{ id: "person.alice", name: "<Alice>" }];
+    panel.driverIds = ["person.deleted"];
+    panel.categoryNames = ["Old & retired"];
+    panel.categories = ["Work"];
+    panel.updateTripFilterChoices();
+    assert.match(nodes.get("#driver").innerHTML, /&lt;Alice&gt;/);
+    assert.match(nodes.get("#driver").innerHTML, /person.deleted/);
+    assert.match(nodes.get("#category").innerHTML, /Old &amp; retired/);
+    assert.equal(nodes.get("#driver").label.hidden, true);
+    panel.filters.driver = "person.deleted";
+    panel.filters.category = "Old & retired";
+    panel.updateTripFilterChoices();
+    assert.equal(nodes.get("#driver").label.hidden, false);
+    assert.equal(nodes.get("#category").label.hidden, false);
+    assert.equal(nodes.get("#driver").value, "person.deleted");
+    panel.trips = [
+        { driver: "person.deleted", categories: ["Old & retired", "Work"] },
+        { driver: "person.alice", categories: ["Work"] },
+        {},
+    ];
+    panel.applyFilters(false);
+    assert.equal(panel.filteredTrips.length, 1);
+    assert.equal(panel.filteredTrips[0].driver, "person.deleted");
+});
+
 test("pagination defaults to 10, appends without rebuilding existing cards, and stops at the end", async () => {
     const requests = [];
     const { panel, nodes } = createPaginationPanel(async (url) => {
@@ -399,33 +464,31 @@ test("pagination defaults to 10, appends without rebuilding existing cards, and 
     assert.equal(requests.length, 3);
 });
 
-test("filter and batch changes restart pagination, validate size, and reset to 10", async () => {
+test("filter changes restart pagination with a fixed batch size", async () => {
     const requests = [];
     const { panel, nodes } = createPaginationPanel(async (url) => {
         requests.push(new URL(url, "http://localhost").searchParams);
         return paginatedResponse([], 0);
     });
     panel.render();
-    nodes.get("#page-size").value = "25";
+    assert.doesNotMatch(panel.shadowRoot.innerHTML, /id="page-size"/);
     nodes.get("#from").value = "2026-10-01";
     nodes.get("#to").value = "2026-10-31";
     nodes.get("#vehicle").value = "other";
     nodes.get(".filters").listeners.change();
     await new Promise(setImmediate);
-    assert.equal(requests[0].get("limit"), "25");
+    assert.equal(requests[0].get("limit"), "10");
     assert.equal(requests[0].get("offset"), "0");
     assert.equal(requests[0].get("vehicle"), "other");
     assert.equal(requests[0].get("from"), "2026-10-01");
     assert.equal(requests[0].get("to"), "2026-10-31");
-    nodes.get("#page-size").value = "0";
-    nodes.get(".filters").listeners.change();
-    assert.equal(requests.length, 1);
-    assert.equal(nodes.get("#page-size").validityReported, true);
     nodes.get("#reset").listeners.click();
     await new Promise(setImmediate);
     assert.equal(panel.pageSize, 10);
     assert.equal(requests[1].get("limit"), "10");
     assert.equal(requests[1].has("vehicle"), false);
+    assert.equal(requests[1].has("from"), false);
+    assert.equal(requests[1].has("to"), false);
     assert.match(nodes.get(".trips-grid").innerHTML, /No trips match/);
 });
 

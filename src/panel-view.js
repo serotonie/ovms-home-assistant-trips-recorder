@@ -17,7 +17,8 @@ export function renderPanel(panel) {
         .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .summary { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; }
         .trip-count { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; color: var(--secondary-text-color); background: var(--secondary-background-color); font-size: var(--ha-font-size-s, 14px); font-variant-numeric: tabular-nums; }
-        .filters { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); box-shadow: var(--ha-card-box-shadow, none); }
+        .filters label[hidden] { display: none; }
         label { display: grid; gap: 8px; color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
         input, select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 12px; color: var(--primary-text-color); background: var(--input-fill-color, var(--card-background-color)); border: 1px solid var(--input-stroke-color, var(--divider-color)); border-radius: var(--ha-border-radius-md, 8px); font: inherit; transition: border-color 120ms ease, box-shadow 120ms ease; }
         input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
@@ -64,7 +65,8 @@ export function renderPanel(panel) {
                     <label>${panel.t("from")} <input id="from" type="date"></label>
                     <label>${panel.t("to")} <input id="to" type="date"></label>
                     <label>${panel.t("vehicle")} <select id="vehicle"><option value="">${panel.t("allVehicles")}</option>${vehicles.map((vehicle) => `<option value="${panel.escape(vehicle)}">${panel.escape(vehicle)}</option>`).join("")}</select></label>
-                    <label>${panel.t("pageSize")} <input id="page-size" type="number" min="1" max="100" step="1" value="${panel.pageSize}"></label>
+                    <label ${!panel.driverControlsEnabled && !panel.filters.driver ? "hidden" : ""}>${panel.t("driver")} <select id="driver"></select></label>
+                    <label ${!panel.categoryControlsEnabled && !panel.filters.category ? "hidden" : ""}>${panel.t("category")} <select id="category"></select></label>
                     <ha-button id="reset" appearance="outlined">${panel.t("reset")}</ha-button>
         </form>
                 <section id="driver-settings" class="driver-settings" aria-live="polite">${renderDriverSettings(panel)}</section>
