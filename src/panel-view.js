@@ -52,9 +52,14 @@ export function renderPanel(panel) {
         .pagination-error { color: var(--error-color); }
         .driver-settings { margin-bottom: 24px; }
         .trip-driver { margin-block: 12px; }
-        .trip-categories { margin: 12px 0; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px; }
+        .trip-categories { margin: 12px 0 0; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; }
+        .trip-categories summary { color: var(--secondary-text-color); cursor: pointer; font-size: var(--ha-font-size-s, 14px); font-weight: 500; }
+        .trip-categories fieldset { margin: 8px 0 0; padding: 0; border: 0; }
         .category-choice { display: flex; align-items: center; gap: 8px; margin-block: 8px; }
         .category-choice input { width: auto; min-height: auto; }
+        .trip-actions { display: inline-flex; align-items: center; gap: 4px; }
+        .trip-actions ha-icon-button { color: var(--primary-text-color); }
+        .trip-actions .trip-delete { color: var(--error-color); }
         .driver-warning { color: var(--error-color); }
         #trip-merge-dialog { max-width: min(560px, calc(100vw - 48px)); color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px); }
         #trip-merge-dialog::backdrop { background: rgb(0 0 0 / 45%); }
@@ -111,13 +116,13 @@ export function renderTripDetails(panel, trip) {
                 <select data-driver-kind="trip" data-driver-target="${panel.escape(trip.id || "")}" ${!trip.id || !panel.drivers.length || panel.savingDriver ? "disabled" : ""}>${panel.driverOptions(trip.driver)}</select>
             </label>
             ${!trip.driver ? `<span class="driver-warning">${panel.escape(panel.t("driverNotSet"))}</span>` : ""}` : ""}
-            ${renderTripCategories(panel, trip)}
             <div class="route">
                 <i class="dot"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.start_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "start"))}</span></div>
                 <i class="connector"></i>
                 <i class="dot stop"></i><div class="address"><strong>${panel.escape(panel.formatDate(trip.stop_time))}</strong><span>${panel.escape(panel.formatAddress(trip, "stop"))}</span></div>
             </div>
-            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-button data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" appearance="outlined" ${panel.mergingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("mergeTrip"))}</ha-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-button class="trip-delete" data-delete-trip="${panel.escape(trip.id)}" appearance="outlined" ${panel.deletingTripId === trip.id ? "disabled" : ""}>${panel.escape(panel.t("deleteTrip"))}</ha-button>` : ""}` : ""}</div>
+            <div class="trip-foot"><span class="distance">${Number(trip.distance || 0).toFixed(1)} km</span>${trip.id ? `<span class="trip-actions">${panel.canMergeTrip(trip) && trip.merge_next_id && trip.stop_time ? `<ha-icon-button title="${panel.escape(panel.t("mergeTrip"))}" aria-label="${panel.escape(panel.t("mergeTrip"))}" data-merge-trip="${panel.escape(trip.id)}" data-merge-next="${panel.escape(trip.merge_next_id)}" ${panel.mergingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:call-merge"></ha-icon></ha-icon-button>` : ""}${panel._hass?.user?.is_admin ? `<ha-icon-button class="trip-delete" title="${panel.escape(panel.t("deleteTrip"))}" aria-label="${panel.escape(panel.t("deleteTrip"))}" data-delete-trip="${panel.escape(trip.id)}" ${panel.deletingTripId === trip.id ? "disabled" : ""}><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>` : ""}</span>` : ""}</div>
+            ${renderTripCategories(panel, trip)}
                 `;
 }
 
@@ -125,13 +130,16 @@ export function renderTripCategories(panel, trip) {
     if (!panel.categoryControlsEnabled) return "";
     const selected = trip.categories || [];
     const choices = [...new Set([...panel.categories, ...selected])];
-    return `<fieldset class="trip-categories" ${!trip.id || panel.savingCategories ? "disabled" : ""}>
-        <legend>${panel.escape(panel.t("categories"))}</legend>
+    return `<details class="trip-categories">
+        <summary>${panel.escape(panel.t("categories"))}</summary>
+        <fieldset ${!trip.id || panel.savingCategories ? "disabled" : ""}>
+        <legend class="visually-hidden">${panel.escape(panel.t("categories"))}</legend>
         ${!choices.length ? `<span>${panel.escape(panel.t("noCategories"))}</span>` : choices.map((category) =>
         `<label class="category-choice"><input type="checkbox" data-category-trip="${panel.escape(trip.id || "")}" value="${panel.escape(category)}" ${selected.includes(category) ? "checked" : ""}>
             <span>${panel.escape(category)}${!panel.categories.includes(category) ? ` (${panel.escape(panel.t("categoryRetired"))})` : ""}</span>
         </label>`).join("")}
-    </fieldset>`;
+        </fieldset>
+    </details>`;
 }
 
 export function renderDriverSettings(panel) {
