@@ -79,6 +79,9 @@ class FakeStore:
     async def async_get_vehicle_ids(self):
         return ["car"]
 
+    async def async_get_trip_merge_candidates(self):
+        return {}
+
 
 class FakeHass:
     def __init__(self, store) -> None:
@@ -134,6 +137,20 @@ def test_panel_pagination_sorts_before_slicing_and_reports_total() -> None:
     assert last["next_offset"] is None
     assert last["has_more"] is False
     assert last["count"] == 23
+
+
+def test_trips_endpoint_includes_next_trip_id_only_for_mergeable_trips() -> None:
+    class CandidateStore(FakeStore):
+        async def async_get_trip_merge_candidates(self):
+            return {"trip-1": "trip-2"}
+
+    view = panel.TripsRecorderApiView(FakeHass(CandidateStore([
+        {"id": "trip-1"}, {"id": "trip-2"},
+    ])))
+    data = asyncio.run(view.get(None))
+    assert data["trips"] == [
+        {"id": "trip-1", "merge_next_id": "trip-2"}, {"id": "trip-2"},
+    ]
 
 
 def test_panel_filters_before_pagination_in_requested_timezone() -> None:
@@ -518,6 +535,54 @@ def test_trip_delete_requires_admin_and_reports_store_results() -> None:
     assert asyncio.run(view.delete(DriverRequest(admin=True), "missing"))["status_code"] == 404
     assert asyncio.run(panel.TripDeleteApiView(FakeHass(None)).delete(
         DriverRequest(admin=True), "trip-1",
+    ))["status_code"] == 503
+
+
+class MergeStore(FakeStore):
+    async def async_get_trip_merge_preview(self, trip_id):
+        if trip_id == "missing":
+            raise KeyError(trip_id)
+        if trip_id == "no-next":
+            raise ValueError("No following trip is available to merge.")
+        return {"trip_id": trip_id, "next_trip_id": "trip-2", "trip": {"distance": 12}}
+
+    async def async_merge_trips(self, trip_id, next_trip_id):
+        if trip_id != "trip-1":
+            raise KeyError(trip_id)
+        if next_trip_id != "trip-2":
+            raise ValueError("The following trip has changed.")
+        return {"trip_id": trip_id, "next_trip_id": next_trip_id}
+
+
+def test_trip_merge_routes_are_registered_and_admin_only() -> None:
+    hass = FakeHass(MergeStore())
+    views = []
+    hass.http = types.SimpleNamespace(register_view=views.append)
+    asyncio.run(panel.async_setup_panel(hass))
+    preview = next(view for view in views if isinstance(view, panel.TripMergePreviewApiView))
+    merge = next(view for view in views if isinstance(view, panel.TripMergeApiView))
+    assert preview.url == "/api/ovms_trips_recorder/trips/{trip_id}/merge-preview"
+    assert merge.url == "/api/ovms_trips_recorder/trips/{trip_id}/merge"
+    assert preview.requires_auth is True
+    assert merge.requires_auth is True
+    assert asyncio.run(preview.get(DriverRequest(admin=False), "trip-1"))["status_code"] == 403
+    assert asyncio.run(merge.post(DriverRequest({"next_trip_id": "trip-2"}, admin=False), "trip-1"))["status_code"] == 403
+    assert asyncio.run(preview.get(DriverRequest(admin=True), "trip-1")) == {
+        "trip_id": "trip-1", "next_trip_id": "trip-2", "trip": {"distance": 12},
+    }
+    assert asyncio.run(merge.post(
+        DriverRequest({"next_trip_id": "trip-2"}, admin=True), "trip-1",
+    )) == {"trip_id": "trip-1", "next_trip_id": "trip-2"}
+    assert asyncio.run(preview.get(DriverRequest(admin=True), "no-next"))["status_code"] == 409
+    assert asyncio.run(preview.get(DriverRequest(admin=True), "missing"))["status_code"] == 404
+    assert asyncio.run(merge.post(
+        DriverRequest({"next_trip_id": "wrong"}, admin=True), "trip-1",
+    ))["status_code"] == 409
+    assert asyncio.run(merge.post(
+        DriverRequest({}, admin=True), "trip-1",
+    ))["status_code"] == 400
+    assert asyncio.run(panel.TripMergeApiView(FakeHass(None)).post(
+        DriverRequest({"next_trip_id": "trip-2"}, admin=True), "trip-1",
     ))["status_code"] == 503
 
 

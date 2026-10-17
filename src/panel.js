@@ -10,6 +10,7 @@ import {
     renderTripDetails,
     renderTrips,
     renderDriverSettings,
+    renderTripMergeDialog,
 } from "./panel-view.js";
 import { TRANSLATIONS } from "./translations.js";
 
@@ -41,6 +42,13 @@ class TripsRecorderPanel extends HTMLElement {
         this.shadowRoot.addEventListener?.("click", (event) => {
             const button = event.target.closest?.("[data-delete-trip]");
             if (button) this.deleteTrip(button.dataset.deleteTrip);
+            const mergeButton = event.target.closest?.("[data-merge-trip]");
+            if (mergeButton) this.previewTripMerge(
+                mergeButton.dataset.mergeTrip,
+                mergeButton.dataset.mergeNext,
+            );
+            if (event.target.closest?.("[data-confirm-merge]")) this.confirmTripMerge();
+            if (event.target.closest?.("[data-cancel-merge]")) this.cancelTripMerge();
         });
         this.trips = [];
         this.drivers = [];
@@ -49,6 +57,9 @@ class TripsRecorderPanel extends HTMLElement {
         this.savingDriver = false;
         this.deleteError = "";
         this.deletingTripId = null;
+        this.mergingTripId = null;
+        this.mergePreview = null;
+        this.mergeError = "";
         this.categories = [];
         this.categoryControlsEnabled = false;
         this.categoryError = "";
@@ -362,6 +373,74 @@ class TripsRecorderPanel extends HTMLElement {
         }
     }
 
+    async previewTripMerge(tripId, nextTripId) {
+        if (!this._hass?.user?.is_admin || !tripId || !nextTripId || this.mergingTripId) return;
+        this.mergingTripId = tripId;
+        this.mergeError = "";
+        this.updateTripDetails();
+        try {
+            const preview = await this._hass.callApi(
+                "GET",
+                `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}/merge-preview`,
+            );
+            if (preview?.trip_id !== tripId || preview?.next_trip_id !== nextTripId ||
+                !preview.trip || !Number.isFinite(Number(preview.trip.distance))) {
+                throw new Error("Invalid merge preview response");
+            }
+            this.mergePreview = preview;
+            this.updateTripMergeDialog(true);
+        } catch (error) {
+            console.error("Failed to preview trip merge", error);
+            this.mergeError = this.t("mergeTripError");
+            this.updateDriverSettings();
+        } finally {
+            this.mergingTripId = null;
+            this.updateTripDetails();
+        }
+    }
+
+    async confirmTripMerge() {
+        if (!this._hass?.user?.is_admin || !this.mergePreview || this.mergingTripId) return;
+        const { trip_id: tripId, next_trip_id: nextTripId } = this.mergePreview;
+        this.mergingTripId = tripId;
+        this.mergeError = "";
+        this.updateTripMergeDialog(false);
+        this.updateTripDetails();
+        try {
+            await this._hass.callApi(
+                "POST",
+                `ovms_trips_recorder/trips/${encodeURIComponent(tripId)}/merge`,
+                { next_trip_id: nextTripId },
+            );
+            this.cancelTripMerge();
+            await this.loadTrips({ refresh: true });
+        } catch (error) {
+            console.error("Failed to merge trips", error);
+            this.mergeError = this.t("mergeTripError");
+            this.updateTripMergeDialog(true);
+        } finally {
+            this.mergingTripId = null;
+            if (this.mergePreview) this.updateTripMergeDialog(true);
+            this.updateTripDetails();
+        }
+    }
+
+    cancelTripMerge() {
+        this.mergePreview = null;
+        this.mergeError = "";
+        const dialog = this.shadowRoot.querySelector("#trip-merge-dialog");
+        if (dialog?.open) dialog.close();
+        if (dialog) dialog.innerHTML = "";
+        this.updateTripDetails();
+    }
+
+    updateTripMergeDialog(open) {
+        const dialog = this.shadowRoot.querySelector("#trip-merge-dialog");
+        if (!dialog) return;
+        dialog.innerHTML = renderTripMergeDialog(this);
+        if (open && !dialog.open) dialog.showModal?.();
+    }
+
     updateTrips(trips, { prefiltered = false } = {}) {
         const previousTrips = this.filteredTrips;
         this.trips = [...trips];
@@ -500,6 +579,10 @@ class TripsRecorderPanel extends HTMLElement {
 
     bindEvents() {
         this.shadowRoot.querySelector(".filters")?.addEventListener("submit", (event) => event.preventDefault());
+        this.shadowRoot.querySelector("#trip-merge-dialog")?.addEventListener("cancel", (event) => {
+            event.preventDefault();
+            this.cancelTripMerge();
+        });
         this.shadowRoot.querySelector(".filters")?.addEventListener("change", () => {
             this.applyFilters();
         });

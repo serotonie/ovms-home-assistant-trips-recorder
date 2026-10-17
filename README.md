@@ -167,6 +167,25 @@ administrators:
   It returns 403 for non-administrators, 404 for an unknown trip, and 503 when
   trip storage is unavailable.
 
+## Merging trips
+
+Administrators can merge a completed trip with the next completed, non-overlapping
+trip for the same vehicle. The panel displays a preview of the combined route,
+times, and distance in a dialog before the merge is confirmed. The merged trip
+keeps the first trip's ID and start details, uses the second trip's stop details,
+combines waypoints, and sums distances. Categories are combined and the first
+available driver assignment is retained.
+
+The administrator-only API offers a preview and a merge action:
+
+- `GET /api/ovms_trips_recorder/trips/{trip_id}/merge-preview` returns the
+  proposed combined trip.
+- `POST /api/ovms_trips_recorder/trips/{trip_id}/merge` accepts
+  `{"next_trip_id": "..."}` and rechecks that the trips are still mergeable.
+
+Both endpoints require an administrator. Missing trips return 404, invalid or
+stale merges return 409, and unavailable storage returns 503.
+
 ## Structure
 
 ```text

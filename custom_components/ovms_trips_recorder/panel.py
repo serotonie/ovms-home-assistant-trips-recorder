@@ -131,6 +131,14 @@ class TripsRecorderApiView(HomeAssistantView):
                 "has_more": next_offset < count,
                 "next_offset": next_offset if next_offset < count else None,
             }
+        merge_candidates = (
+            await store.async_get_trip_merge_candidates() if store else {}
+        )
+        trips = [
+            {**trip, "merge_next_id": merge_candidates[trip["id"]]}
+            if trip.get("id") in merge_candidates else trip
+            for trip in trips
+        ]
         return self.json(
             {
                 "title": PANEL_TITLE,
@@ -352,6 +360,61 @@ class TripDeleteApiView(HomeAssistantView):
         return self.json({"deleted": True})
 
 
+class TripMergePreviewApiView(HomeAssistantView):
+    """Preview an administrator-requested merge with the next vehicle trip."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/trips/{{trip_id}}/merge-preview"
+    name = f"api:{DOMAIN}:trip_merge_preview"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, trip_id: str):
+        if not getattr(request.get("hass_user"), "is_admin", False):
+            return self.json_message("Administrator access required.", status_code=403)
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        try:
+            return self.json(await store.async_get_trip_merge_preview(trip_id))
+        except KeyError:
+            return self.json_message("Trip not found.", status_code=404)
+        except ValueError as error:
+            return self.json_message(str(error), status_code=409)
+
+
+class TripMergeApiView(HomeAssistantView):
+    """Merge two consecutive trips as an administrator."""
+
+    requires_auth = True
+    url = f"/api/{PANEL_PATH}/trips/{{trip_id}}/merge"
+    name = f"api:{DOMAIN}:trip_merge"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def post(self, request: web.Request, trip_id: str):
+        if not getattr(request.get("hass_user"), "is_admin", False):
+            return self.json_message("Administrator access required.", status_code=403)
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_TRIP_STORE)
+        if store is None:
+            return self.json_message("Trip storage is unavailable.", status_code=503)
+        try:
+            data = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return self.json_message("Invalid JSON body.", status_code=400)
+        if not isinstance(data, dict) or not isinstance(data.get("next_trip_id"), str):
+            return self.json_message("'next_trip_id' must be a trip ID.", status_code=400)
+        try:
+            result = await store.async_merge_trips(trip_id, data["next_trip_id"])
+        except KeyError:
+            return self.json_message("Trip not found.", status_code=404)
+        except ValueError as error:
+            return self.json_message(str(error), status_code=409)
+        return self.json(result)
+
+
 async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the panel routes consumed by Home Assistant."""
     hass.http.register_view(TripsRecorderApiView(hass))
@@ -360,5 +423,7 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
     hass.http.register_view(CategoriesApiView(hass))
     hass.http.register_view(TripCategoriesApiView(hass))
     hass.http.register_view(TripDeleteApiView(hass))
+    hass.http.register_view(TripMergePreviewApiView(hass))
+    hass.http.register_view(TripMergeApiView(hass))
     hass.http.register_view(TripsRecorderModuleView())
     hass.http.register_view(VehicleTripsApiView(hass))

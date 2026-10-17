@@ -40,6 +40,12 @@ Object.assign(TRANSLATIONS.en, {
     deleteTrip: "Delete trip",
     confirmDeleteTrip: "Permanently delete this trip?",
     deleteTripError: "Unable to delete the trip. Please try again.",
+    mergeTrip: "Merge with next trip",
+    mergePreview: "Review the combined trip before confirming.",
+    distance: "Distance",
+    cancel: "Cancel",
+    confirmMerge: "Merge trips",
+    mergeTripError: "Unable to merge the trips. Please refresh and try again.",
 });
 Object.assign(TRANSLATIONS.fr, {
     allDrivers: "Tous les conducteurs",
@@ -59,6 +65,12 @@ Object.assign(TRANSLATIONS.fr, {
     deleteTrip: "Supprimer le trajet",
     confirmDeleteTrip: "Supprimer définitivement ce trajet ?",
     deleteTripError: "Impossible de supprimer le trajet. Veuillez réessayer.",
+    mergeTrip: "Fusionner avec le trajet suivant",
+    mergePreview: "Vérifiez le trajet fusionné avant de confirmer.",
+    distance: "Distance",
+    cancel: "Annuler",
+    confirmMerge: "Fusionner les trajets",
+    mergeTripError: "Impossible de fusionner les trajets. Actualisez et réessayez.",
 });
 
 const PAGINATION_TRANSLATIONS = {
