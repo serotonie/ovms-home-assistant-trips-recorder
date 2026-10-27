@@ -222,6 +222,7 @@ restrict API access for authenticated users.
 | Trips panel is missing | Confirm that **OVMS Trips Recorder** was added under **Settings > Devices & Services**, not only downloaded in HACS. |
 | A vehicle or its trips are missing | Confirm that the vehicle has its own parent OVMS integration entry and that its entities receive data. Only vehicles declared there are recorded. |
 | Driver or category controls are missing | Enable the corresponding option in the integration's **Configure** dialog. These switches are not in the Trips panel. |
+| Map tiles are missing | Check browser network access to `tile.openstreetmap.org`. The public OpenStreetMap tile service may throttle excessive use. |
 | A trip has coordinates but no address | Reverse geocoding may have failed. Trips and waypoints are still saved; GPS coordinates are preserved. |
 | More results fail to load | Use **Retry** in the panel; already loaded trips are kept. |
 

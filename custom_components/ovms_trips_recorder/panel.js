@@ -7601,7 +7601,7 @@
 			return loadLeafletModule();
 		}
 		getTileUrl() {
-			return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+			return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 		}
 		getTileAttribution() {
 			return "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors";

@@ -733,6 +733,7 @@ class TripStore:
                 await asyncio.sleep(wait_for)
             geocoder = Nominatim(user_agent="ovms-trips-recorder")
             try:
+                self._last_geocode_at = time.monotonic()
                 location = await self._hass.async_add_executor_job(
                     partial(
                         geocoder.reverse,
@@ -744,7 +745,6 @@ class TripStore:
             except Exception as ex:
                 _LOGGER.warning("Unable to reverse geocode trip point: %s", ex)
                 return {}
-            self._last_geocode_at = time.monotonic()
             address = dict(
                 (location.raw if location else {}).get("address", {}))
             address["village"] = address.get(

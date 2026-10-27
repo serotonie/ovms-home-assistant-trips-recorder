@@ -1079,7 +1079,7 @@ test("applyFilters() compares trip dates in the Home Assistant timezone, falling
 test("getTileUrl() utilise les tuiles OpenStreetMap sans clé d'API", () => {
     const { panel } = createPanelWithFakeLeaflet();
 
-    assert.equal(panel.getTileUrl(), "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+    assert.equal(panel.getTileUrl(), "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
     assert.match(panel.getTileAttribution(), /openstreetmap\.org\/copyright/);
     assert.doesNotMatch(panel.getTileAttribution(), /CARTO/);
 });

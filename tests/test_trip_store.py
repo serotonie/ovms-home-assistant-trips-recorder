@@ -86,6 +86,29 @@ def test_save_notifies_without_broadcasting_all_trips() -> None:
     assert events == [(trip_store.TRIP_UPDATED_EVENT,)]
 
 
+def test_failed_nominatim_request_still_obeys_rate_limit(monkeypatch) -> None:
+    class FailingGeocoder:
+        def __init__(self, *, user_agent):
+            assert user_agent == "ovms-trips-recorder"
+
+        def reverse(self, *_args, **_kwargs):
+            raise RuntimeError("service unavailable")
+
+    async def run_in_executor(job):
+        return job()
+
+    monkeypatch.setattr(trip_store, "Nominatim", FailingGeocoder)
+    monkeypatch.setattr(trip_store.time, "monotonic", lambda: 100.0)
+    store = TripStore.__new__(TripStore)
+    store._geocode_cache = {}
+    store._geocode_lock = asyncio.Lock()
+    store._last_geocode_at = 0.0
+    store._hass = types.SimpleNamespace(async_add_executor_job=run_in_executor)
+
+    assert asyncio.run(store._async_geocode(46.5, 6.5)) == {}
+    assert store._last_geocode_at == 100.0
+
+
 def test_delete_trip_removes_completed_and_active_trips_and_persists() -> None:
     completed = {"id": "completed"}
     active = {"id": "active"}
