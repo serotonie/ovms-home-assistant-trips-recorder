@@ -17,5 +17,5 @@
   "requirements": [
     "geopy>=2.3.0"
   ],
-  "version": "2.9.4"
+  "version": "2.9.5"
 }
