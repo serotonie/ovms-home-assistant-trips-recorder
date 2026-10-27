@@ -7537,6 +7537,9 @@
 			this.loading = false;
 			this._narrow = null;
 			this.maps = /* @__PURE__ */ new Map();
+			this.mapObserver = null;
+			this.mapObserverPending = /* @__PURE__ */ new WeakSet();
+			this.mapObserverVisible = /* @__PURE__ */ new WeakSet();
 			this.pageSize = 10;
 			this.total = 0;
 			this.hasMore = false;
@@ -8048,10 +8051,32 @@
 			if (!containers.length) return;
 			const Leaflet = await this.loadLeaflet();
 			if (!Leaflet) return;
+			if (!this.mapObserver && typeof IntersectionObserver === "function") {
+				const observer = new IntersectionObserver((entries) => {
+					if (this.mapObserver !== observer) return;
+					let becameVisible = false;
+					entries.forEach((entry) => {
+						if (!entry.isIntersecting) return;
+						observer.unobserve(entry.target);
+						this.mapObserverPending.delete(entry.target);
+						this.mapObserverVisible.add(entry.target);
+						becameVisible = true;
+					});
+					if (becameVisible) this.renderLeafletMaps();
+				}, { rootMargin: "200px" });
+				this.mapObserver = observer;
+			}
 			containers.forEach((container) => {
 				const index = Number(container.dataset.index);
 				const trip = this.filteredTrips[index];
 				if (!trip) return;
+				if (!this.maps.has(container) && this.mapObserver && !this.mapObserverVisible.has(container)) {
+					if (!this.mapObserverPending.has(container)) {
+						this.mapObserverPending.add(container);
+						this.mapObserver.observe(container);
+					}
+					return;
+				}
 				const points = (trip.waypoints || []).map((point) => [Number(point.position_lat), Number(point.position_long)]).filter(([latitude, longitude]) => Number.isFinite(latitude) && Number.isFinite(longitude));
 				const pathStyle = {
 					color: "#03a9f4",
@@ -8117,6 +8142,10 @@
 			return this.queueMapTask(() => this.destroyLeafletMapsNow());
 		}
 		destroyLeafletMapsNow() {
+			this.mapObserver?.disconnect();
+			this.mapObserver = null;
+			this.mapObserverPending = /* @__PURE__ */ new WeakSet();
+			this.mapObserverVisible = /* @__PURE__ */ new WeakSet();
 			this.maps.forEach((entry) => {
 				entry.resizeObserver?.disconnect();
 				entry.map.remove();
