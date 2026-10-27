@@ -1107,6 +1107,10 @@ test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et l
     await panel.renderLeafletMaps();
 
     assert.equal(fakeLeaflet.maps.length, 2);
+    assert.equal(
+        fakeLeaflet.tileLayers[0].options.referrerPolicy,
+        "strict-origin-when-cross-origin",
+    );
     assert.equal(JSON.stringify(fakeLeaflet.polylines[0].points), JSON.stringify([[48, 2], [48.1, 2.1]]));
     assert.equal(JSON.stringify(fakeLeaflet.circleMarkers[0].point), JSON.stringify([48, 2]));
     assert.equal(fakeLeaflet.circleMarkers[0].options.fillColor, "#2196f3");

@@ -8093,7 +8093,8 @@
 					container.classList?.toggle("dark-map", Boolean(this._hass?.themes?.darkMode));
 					Leaflet.tileLayer(this.getTileUrl(), {
 						attribution: this.getTileAttribution(),
-						maxZoom: 19
+						maxZoom: 19,
+						referrerPolicy: "strict-origin-when-cross-origin"
 					}).addTo(map);
 					entry = {
 						map,

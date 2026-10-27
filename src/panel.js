@@ -748,6 +748,7 @@ class TripsRecorderPanel extends HTMLElement {
                 Leaflet.tileLayer(this.getTileUrl(), {
                     attribution: this.getTileAttribution(),
                     maxZoom: 19,
+                    referrerPolicy: "strict-origin-when-cross-origin",
                 }).addTo(map);
                 const path = Leaflet.polyline(points, pathStyle).addTo(map);
                 entry = { map, path, startMarker: null, endMarker: null, points, container };
