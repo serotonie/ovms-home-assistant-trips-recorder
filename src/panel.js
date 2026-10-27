@@ -155,7 +155,7 @@ class TripsRecorderPanel extends HTMLElement {
     }
 
     getTileUrl() {
-        return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+        return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
     }
 
     getTileAttribution() {
