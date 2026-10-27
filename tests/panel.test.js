@@ -168,6 +168,7 @@ function createPanelWithFakeLeaflet(options = {}) {
         document: { createElement: () => ({}) },
         window: options.window || {},
         ResizeObserver: options.ResizeObserver,
+        IntersectionObserver: options.IntersectionObserver,
     });
     const panel = new TripsRecorderPanel();
     const fakeLeaflet = createFakeLeaflet();
@@ -1106,6 +1107,10 @@ test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et l
     await panel.renderLeafletMaps();
 
     assert.equal(fakeLeaflet.maps.length, 2);
+    assert.equal(
+        fakeLeaflet.tileLayers[0].options.referrerPolicy,
+        "strict-origin-when-cross-origin",
+    );
     assert.equal(JSON.stringify(fakeLeaflet.polylines[0].points), JSON.stringify([[48, 2], [48.1, 2.1]]));
     assert.equal(JSON.stringify(fakeLeaflet.circleMarkers[0].point), JSON.stringify([48, 2]));
     assert.equal(fakeLeaflet.circleMarkers[0].options.fillColor, "#2196f3");
@@ -1115,6 +1120,57 @@ test("renderLeafletMaps() crée une carte Leaflet par trajet avec le tracé et l
     // A single waypoint cannot be fitted into bounds, so it falls back to setView().
     assert.equal(JSON.stringify(fakeLeaflet.maps[1].center), JSON.stringify([49, 3]));
     assert.equal(fakeLeaflet.maps[1].zoom, 15);
+});
+
+test("renderLeafletMaps() charge les cartes uniquement à proximité de la zone visible", async () => {
+    const observers = [];
+    class FakeIntersectionObserver {
+        constructor(callback, options) {
+            this.callback = callback;
+            this.options = options;
+            this.targets = new Set();
+            observers.push(this);
+        }
+        observe(target) {
+            this.targets.add(target);
+        }
+        unobserve(target) {
+            this.targets.delete(target);
+        }
+        disconnect() {
+            this.targets.clear();
+        }
+    }
+    const { panel, fakeLeaflet } = createPanelWithFakeLeaflet({
+        IntersectionObserver: FakeIntersectionObserver,
+    });
+    const containers = [
+        { dataset: { index: "0" } },
+        { dataset: { index: "1" } },
+    ];
+    panel.shadowRoot.querySelectorAll = () => containers;
+    panel.filteredTrips = [
+        { waypoints: [{ position_lat: "48", position_long: "2" }] },
+        { waypoints: [{ position_lat: "49", position_long: "3" }] },
+    ];
+
+    await panel.renderLeafletMaps();
+
+    assert.equal(fakeLeaflet.maps.length, 0);
+    assert.equal(observers.length, 1);
+    assert.equal(observers[0].options.rootMargin, "200px");
+    assert.deepEqual([...observers[0].targets], containers);
+
+    observers[0].callback([{ target: containers[0], isIntersecting: true }]);
+    await panel._mapRenderQueue;
+
+    assert.equal(fakeLeaflet.maps.length, 1);
+    assert.deepEqual([...observers[0].targets], [containers[1]]);
+
+    observers[0].callback([{ target: containers[1], isIntersecting: true }]);
+    await panel._mapRenderQueue;
+
+    assert.equal(fakeLeaflet.maps.length, 2);
 });
 
 test("renderLeafletMaps() affiche le tracé du trajet en cours avec une opacité réduite", async () => {

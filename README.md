@@ -222,7 +222,7 @@ restrict API access for authenticated users.
 | Trips panel is missing | Confirm that **OVMS Trips Recorder** was added under **Settings > Devices & Services**, not only downloaded in HACS. |
 | A vehicle or its trips are missing | Confirm that the vehicle has its own parent OVMS integration entry and that its entities receive data. Only vehicles declared there are recorded. |
 | Driver or category controls are missing | Enable the corresponding option in the integration's **Configure** dialog. These switches are not in the Trips panel. |
-| Map tiles are missing | Check browser network access to `tile.openstreetmap.org`. The public OpenStreetMap tile service may throttle excessive use. |
+| Map tiles are missing | Maps load as they approach the viewport and send the Home Assistant origin as the cross-origin `Referer`. For a `403` or “General block”, inspect the tile request in browser network tools (status, `Referer`, and cache headers) and compare usage with the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/). A block message does not identify its cause; do not spoof request identity or bypass restrictions. Choose a tile provider suited to your usage if needed. |
 | A trip has coordinates but no address | Reverse geocoding may have failed. Trips and waypoints are still saved; GPS coordinates are preserved. |
 | More results fail to load | Use **Retry** in the panel; already loaded trips are kept. |
 
